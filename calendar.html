@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#F6F0FF">
+<title>ปฏิทินและงาน · AnnyLuk</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mali:wght@400;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{--bg:#F6F0FF;--ink:#3B2F5C;--mut:#6E6392;--pri:#7457C2;--soft:#E4D6FA;--line:#EFE7FB;--pink:#FCE8F3;--neg:#B0407E;--pos:#2F7D5B}
+@media(prefers-color-scheme:dark){:root{--bg:#1E1830;--ink:#F0E9FF;--mut:#B6A9D6;--pri:#9B82E6;--soft:#3A2F5C;--line:#32284F;--pink:#3A2440;--neg:#F08CBD;--pos:#7ED3AA}.card,.sheet,input,select,textarea,.cell{background:#2A2142!important}button.pri{color:#1E1830!important}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'Mali',sans-serif}
+body{padding:calc(20px + env(safe-area-inset-top)) 14px calc(100px + env(safe-area-inset-bottom));max-width:760px;margin:0 auto}
+h1,h2{margin:0}h2{font-size:17px;margin:16px 0 8px}
+.card{background:#fff;border-radius:20px;padding:6px 16px}
+.mut{color:var(--mut);font-size:13px}.b{font-weight:600}
+button{font-family:inherit;min-height:44px;border:0;border-radius:16px;padding:0 14px;font-size:15px;background:#fff;color:var(--pri);font-weight:600;cursor:pointer}
+button.pri{background:var(--pri);color:#fff}button.ghost{background:transparent;border:1.5px solid var(--soft)}button.del{background:transparent;color:var(--neg);border:1.5px solid var(--soft)}
+.chip{border-radius:22px;background:var(--soft)}.chip.on{background:var(--pri);color:#fff}
+input,select,textarea{width:100%;min-height:46px;border:1.5px solid var(--soft);border-radius:14px;padding:0 12px;font:inherit;font-size:16px;background:#FBF8FF;color:var(--ink)}
+textarea{padding:10px 12px;min-height:84px}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mut);margin-bottom:10px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}.row:last-child{border:0}
+.top{display:flex;align-items:center;gap:10px;margin-bottom:12px}.top h1{flex:1;font-size:24px}
+.tabs{display:flex;gap:8px;margin-bottom:10px}.tabs button{flex:1}
+.hf{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.hf .chip{min-height:40px;font-size:14px}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.nav .b{flex:1;text-align:center}
+.dow,.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.dow div{text-align:center;font-size:12px;color:var(--mut);padding:4px 0}
+.cell{background:#fff;border-radius:12px;min-height:58px;padding:4px;cursor:pointer;overflow:hidden}.cell.out{opacity:.45}.cell.today{outline:2px solid var(--pri)}
+.dnum{font-size:13px;font-weight:600}.dots{display:flex;gap:2px;flex-wrap:wrap;margin-top:3px}.dots i{width:7px;height:7px;border-radius:50%}.titles{display:none}
+@media(min-width:600px){.cell{min-height:92px}.dots{display:none}.titles{display:block}.tt{font-size:11px;padding:1px 4px;margin-top:2px;border-radius:4px;background:var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+.item{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}.item:last-child{border:0}.grow{flex:1;min-width:0}
+.ck{width:26px;height:26px;min-height:0;padding:0;border-radius:50%;border:2.5px solid;background:transparent;flex:none}.ck.on{background:var(--pri)}
+.item.fin .ti{text-decoration:line-through;opacity:.6}.dot{width:12px;height:12px;border-radius:50%;flex:none}
+.fab{position:fixed;right:max(16px,calc(50% - 364px));bottom:calc(20px + env(safe-area-inset-bottom));min-height:56px;border-radius:28px;background:var(--pri);color:#fff;box-shadow:0 6px 18px rgba(80,50,150,.35);z-index:5;padding:0 22px;font-size:16px}
+#ov{position:fixed;inset:0;background:rgba(40,25,70,.45);display:none;align-items:flex-end;justify-content:center;z-index:9}
+.sheet{background:#fff;width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:26px 26px 0 0;padding:20px 18px calc(24px + env(safe-area-inset-bottom))}
+.btns{display:flex;gap:8px}.btns button{flex:1}.err{color:var(--neg);font-size:14px;min-height:20px}.lk{color:var(--pri)}
+.sw{position:relative;display:inline-block;width:46px;height:28px;flex:none}.sw input{position:absolute;inset:0;width:100%;height:100%;min-height:0;opacity:0;margin:0;padding:0;border:0;cursor:pointer;z-index:1}.sw i{position:absolute;inset:0;background:#cfc3ea;border-radius:14px;transition:.2s}.sw i:before{content:'';position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:.2s}.sw input:checked+i{background:var(--pri)}.sw input:checked+i:before{transform:translateX(18px)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="ov" onclick="if(event.target===this)closeSheet()"><div class="sheet" id="sheet"></div></div>
+<script>
+const SB_URL='https://etqgjkeyoxgfncphtiao.supabase.co',SB_KEY='sb_publishable_adz6BHqdK99sKdBnJsNk-g_PRRhpYTj';
+const DOW=['อา','จ','อ','พ','พฤ','ศ','ส'],MN=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const PC=['#B9B0D0','#3F7FBF','#C98A2B','#C0392B'],PL=['ไม่มี','ต่ำ','กลาง','สูง'],RL={none:'ไม่ทำซ้ำ',daily:'ทุกวัน',weekly:'ทุกสัปดาห์',monthly:'ทุกเดือน'};
+const COLORS=['#7457C2','#D9669A','#3D8F6B','#C98A2B','#3F7FBF','#8C6B55'],CN=['ม่วง','ชมพู','เขียว','เหลือง','ฟ้า','น้ำตาล'];
+let sb,TK=[],LS=[],IP=[],II=[],AC=[],ST={tab:'cal',view:'month',cur:new Date(),q:'',fl:'',fp:'',ft:'',done:false};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>'฿'+Number(n).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const ymdOf=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const pd=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const addDays=(s,n)=>{const d=pd(s);d.setDate(d.getDate()+n);return ymdOf(d)};
+function addMonthKeep(s,n){const[y,m,d]=s.split('-').map(Number),last=new Date(y,m-1+n+1,0).getDate();return ymdOf(new Date(y,m-1+n,Math.min(d,last)))}
+const fd=s=>pd(s).toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+async function q(p){const r=await p;if(r.error){alert('ผิดพลาด: '+r.error.message);throw r.error}return r.data}
+function openSheet(h){$('sheet').innerHTML=h;$('ov').style.display='flex'}
+function closeSheet(){$('ov').style.display='none'}
+const listOf=t=>LS.find(l=>l.id===t.list_id),colorOf=t=>(listOf(t)||{}).color||COLORS[0],listName=t=>listOf(t)?listOf(t).name:'ไม่มีลิสต์';
+const nmA=id=>{const a=AC.find(x=>x.id===id);return a?a.nickname:'-'};
+const chk=t=>{const s=t.subtasks||[];return s.length?` · ☑ ${s.filter(x=>x.done).length}/${s.length}`:''};
+
+async function init(){
+  if(!window.supabase){$('app').innerHTML='<p class="err">โหลดระบบไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วรีเฟรช</p>';return}
+  sb=supabase.createClient(SB_URL,SB_KEY);const{data}=await sb.auth.getSession();
+  if(!data.session){$('app').innerHTML='<h1 style="margin-top:40px">ปฏิทินและงาน</h1><p class="mut">กรุณาเข้าสู่ระบบที่หน้าการเงินก่อน แล้วกลับมาที่หน้านี้</p><button class="pri" onclick="location.href=\'index.html\'">ไปหน้าการเงิน</button>';return}
+  load();
+}
+async function load(){
+  LS=await q(sb.from('task_lists').select('*').is('deleted_at',null).order('display_order'));
+  TK=await q(sb.from('tasks').select('*').is('deleted_at',null));
+  const a=await sb.from('accounts').select('id,nickname');AC=a.error?[]:a.data;
+  const p=await sb.from('installment_plans').select('*'),i=await sb.from('installment_items').select('*').is('paid_txn_id',null);
+  IP=p.error?[]:p.data;II=i.error?[]:i.data;render();
+}
+function occurs(t,k){if(!t.due_date||k<t.due_date)return false;if(k===t.due_date)return true;const r=t.repeat_rule;
+  if(r==='daily')return true;if(r==='weekly')return pd(k).getDay()===pd(t.due_date).getDay();
+  if(r==='monthly'){const[Y,M,D]=k.split('-').map(Number),d0=Number(t.due_date.split('-')[2]);return D===Math.min(d0,new Date(Y,M,0).getDate())}return false}
+function itemsOn(k){const r=[];
+  for(const t of TK){if(!occurs(t,k))continue;r.push({kind:'task',id:t.id,t,time:t.due_time?t.due_time.slice(0,5):'',done:t.done&&t.repeat_rule==='none'})}
+  for(const i of II){if(i.due_date!==k)continue;const p=IP.find(x=>x.id===i.plan_id);if(p)r.push({kind:'inst',id:i.id,title:`ผ่อน ${p.title} งวด ${i.seq}/${p.months}`,time:'',amt:i.amount,card:nmA(p.card_account_id)})}
+  return r.sort((a,b)=>(a.time||'').localeCompare(b.time||''))}
+function rowHTML(it,showDate){
+  if(it.kind==='inst')return `<div class="item" onclick="instInfo('${it.id}')"><span class="dot" style="background:#D9669A"></span><div class="grow"><div>${esc(it.title)}</div><div class="mut">${showDate&&it.date?fd(it.date)+' · ':''}บัตร ${esc(it.card)} · ${fmt(it.amt)}</div></div></div>`;
+  const t=it.t;return `<div class="item${it.done?' fin':''}" onclick="openTask('${t.id}')"><button class="ck${it.done?' on':''}" aria-label="ทำเสร็จ" onclick="toggleDone('${t.id}',event)" style="border-color:${PC[t.priority]}"></button><div class="grow"><div class="ti">${esc(t.title)}</div><div class="mut"><span class="dot" style="display:inline-block;width:8px;height:8px;background:${colorOf(t)}"></span> ${showDate&&t.due_date?fd(t.due_date)+' · ':''}${it.time?it.time+' · ':''}${esc(listName(t))}${t.repeat_rule!=='none'?' · ↻ '+RL[t.repeat_rule]:''}${(t.tags||[]).map(x=>' #'+esc(x)).join('')}${chk(t)}</div></div></div>`}
+
+function render(){
+  const cal=ST.tab==='cal';
+  let h=`<div class="top"><button class="ghost" aria-label="เมนู" onclick="openMenu()" style="font-size:20px">☰</button><h1>ปฏิทินและงาน</h1></div>
+  <div class="tabs"><button class="chip${cal?' on':''}" onclick="setTab('cal')">ปฏิทิน</button><button class="chip${!cal?' on':''}" onclick="setTab('tasks')">งานทั้งหมด</button></div>`;
+  if(cal){
+    h+=`<div class="hf">${[['month','เดือน'],['week','สัปดาห์'],['day','วัน']].map(([v,l])=>`<button class="chip${ST.view===v?' on':''}" onclick="setView('${v}')">${l}</button>`).join('')}</div>
+    <div class="nav"><button class="ghost" onclick="shift(-1)" aria-label="ก่อนหน้า">◀</button><div class="b">${navTitle()}</div><button class="ghost" onclick="shift(1)" aria-label="ถัดไป">▶</button><button onclick="ST.cur=new Date();render()">วันนี้</button></div>`;
+    h+=ST.view==='month'?monthView():ST.view==='week'?weekView():dayView();
+  }else h+=taskTab();
+  $('app').innerHTML=h+`<button class="fab" onclick="openTaskForm('',${cal?`'${ymdOf(ST.cur)}'`:"''"})">+ เพิ่มงาน</button>`;
+  if(!cal)renderTL();
+}
+function setTab(t){ST.tab=t;render()}function setView(v){ST.view=v;render()}
+function shift(n){const c=ST.cur;ST.cur=ST.view==='month'?new Date(c.getFullYear(),c.getMonth()+n,1):new Date(c.getFullYear(),c.getMonth(),c.getDate()+n*(ST.view==='week'?7:1));render()}
+function navTitle(){const c=ST.cur;if(ST.view==='month')return `${MN[c.getMonth()]} ${c.getFullYear()+543}`;
+  if(ST.view==='day')return fd(ymdOf(c));const s=new Date(c.getFullYear(),c.getMonth(),c.getDate()-c.getDay()),e=new Date(s.getFullYear(),s.getMonth(),s.getDate()+6);return `${s.getDate()} ${MN[s.getMonth()].slice(0,3)}. – ${e.getDate()} ${MN[e.getMonth()].slice(0,3)}. ${e.getFullYear()+543}`}
+function monthView(){const c=ST.cur,y=c.getFullYear(),m=c.getMonth(),start=new Date(y,m,1-new Date(y,m,1).getDay()),today=ymdOf(new Date());
+  let h=`<div class="dow">${DOW.map(d=>`<div>${d}</div>`).join('')}</div><div class="grid">`;
+  for(let i=0;i<42;i++){const d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i),k=ymdOf(d),its=itemsOn(k),cl=it=>it.kind==='inst'?'#D9669A':colorOf(it.t);
+    h+=`<div class="cell${d.getMonth()!==m?' out':''}${k===today?' today':''}" onclick="openDayItems('${k}')"><div class="dnum">${d.getDate()}</div><div class="dots">${its.slice(0,4).map(it=>`<i style="background:${cl(it)}"></i>`).join('')}${its.length>4?'<span class="mut">+</span>':''}</div><div class="titles">${its.slice(0,2).map(it=>`<div class="tt" style="border-left:3px solid ${cl(it)}">${esc(it.kind==='inst'?it.title:it.t.title)}</div>`).join('')}${its.length>2?`<div class="mut">+${its.length-2}</div>`:''}</div></div>`}
+  return h+'</div>'}
+function weekView(){const c=ST.cur,s=new Date(c.getFullYear(),c.getMonth(),c.getDate()-c.getDay()),today=ymdOf(new Date());let h='';
+  for(let i=0;i<7;i++){const k=ymdOf(new Date(s.getFullYear(),s.getMonth(),s.getDate()+i)),its=itemsOn(k);
+    h+=`<h2 style="${k===today?'color:var(--pri)':''}">${fd(k)}${k===today?' (วันนี้)':''}</h2><div class="card">${its.length?its.map(it=>rowHTML(it)).join(''):'<p class="mut">ไม่มีรายการ</p>'}</div>`}return h}
+function dayView(){const k=ymdOf(ST.cur),its=itemsOn(k);return `<div class="card">${its.length?its.map(it=>rowHTML(it)).join(''):'<p class="mut">ไม่มีรายการในวันนี้ กด "+ เพิ่มงาน" ได้เลย</p>'}</div>`}
+function openDayItems(k){const its=itemsOn(k);openSheet(`<h2 style="margin-top:0">${fd(k)}</h2><div class="card" style="margin-bottom:12px">${its.length?its.map(it=>rowHTML(it)).join(''):'<p class="mut">ไม่มีรายการ</p>'}</div><div class="btns"><button class="ghost" onclick="closeSheet()">ปิด</button><button class="pri" onclick="openTaskForm('','${k}')">+ เพิ่มงานวันนี้</button></div>`)}
+function instInfo(id){const i=II.find(x=>x.id===id),p=IP.find(x=>x.id===i.plan_id);
+  openSheet(`<h2 style="margin-top:0">ผ่อนชำระ · ${esc(p.title)}</h2><div class="card"><div class="row"><span>บัตร</span><b>${esc(nmA(p.card_account_id))}</b></div><div class="row"><span>งวดที่</span><span>${i.seq}/${p.months}</span></div><div class="row"><span>ครบกำหนด</span><span>${fd(i.due_date)}</span></div><div class="row"><span>ยอดงวดนี้</span><b>${fmt(i.amount)}</b></div></div><p class="mut">รายการนี้มาจากแอปการเงินอัตโนมัติ กด "จ่ายแล้ว" ได้ที่หน้าการเงิน (บัตร → แสดงรายการผ่อนชำระ)</p><div class="btns"><button class="ghost" onclick="closeSheet()">ปิด</button><button class="pri" onclick="location.href='index.html'">ไปหน้าการเงิน</button></div>`)}
+
+function taskTab(){const tags=[...new Set(TK.flatMap(t=>t.tags||[]))];
+  return `<div class="card" style="padding:12px 16px;margin-bottom:12px"><label style="margin:0 0 8px">ค้นหา<input id="sq" placeholder="ชื่อ รายละเอียด หรือแท็ก" value="${esc(ST.q)}" oninput="ST.q=this.value;renderTL()"></label>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><label style="margin:0">ลิสต์<select onchange="ST.fl=this.value;renderTL()"><option value="">ทั้งหมด</option>${LS.map(l=>`<option value="${l.id}"${ST.fl===l.id?' selected':''}>${esc(l.name)}</option>`).join('')}</select></label>
+  <label style="margin:0">ความสำคัญ<select onchange="ST.fp=this.value;renderTL()"><option value="">ทั้งหมด</option>${PL.map((l,i)=>`<option value="${i}"${ST.fp===String(i)?' selected':''}>${l}</option>`).join('')}</select></label>
+  <label style="margin:0">แท็ก<select onchange="ST.ft=this.value;renderTL()"><option value="">ทั้งหมด</option>${tags.map(x=>`<option${ST.ft===x?' selected':''}>${esc(x)}</option>`).join('')}</select></label></div>
+  <div class="row" style="border:0"><span>แสดงงานที่เสร็จแล้ว</span><span class="sw"><input type="checkbox" aria-label="แสดงงานที่เสร็จแล้ว" ${ST.done?'checked':''} onchange="ST.done=this.checked;renderTL()"><i></i></span></div>
+  <button class="ghost" style="width:100%" onclick="openLists()">จัดการลิสต์</button></div><div id="tl"></div>`}
+function renderTL(){const today=ymdOf(new Date()),qq=ST.q.trim().toLowerCase(),noF=!ST.fl&&!ST.fp&&!ST.ft&&!qq;
+  const ts=TK.filter(t=>(!ST.fl||t.list_id===ST.fl)&&(!ST.fp||String(t.priority)===ST.fp)&&(!ST.ft||(t.tags||[]).includes(ST.ft))&&(!qq||(t.title+' '+(t.notes||'')+' '+(t.tags||[]).join(' ')).toLowerCase().includes(qq)));
+  const E=[];ts.filter(t=>!t.done).forEach(t=>E.push({kind:'task',t,id:t.id,date:t.due_date||'',time:t.due_time?t.due_time.slice(0,5):'',pri:t.priority,done:false}));
+  if(noF)II.forEach(i=>{const p=IP.find(x=>x.id===i.plan_id);if(p&&i.due_date<=addDays(today,45))E.push({kind:'inst',id:i.id,date:i.due_date,time:'',pri:0,title:`ผ่อน ${p.title} งวด ${i.seq}/${p.months}`,amt:i.amount,card:nmA(p.card_account_id)})});
+  const key=e=>(e.date||'9999')+(e.time||'')+(3-e.pri);E.sort((a,b)=>key(a).localeCompare(key(b)));
+  const G={over:[],today:[],week:[],later:[],none:[]};
+  for(const e of E){if(!e.date)G.none.push(e);else if(e.date<today)G.over.push(e);else if(e.date===today)G.today.push(e);else if(e.date<=addDays(today,7))G.week.push(e);else G.later.push(e)}
+  const sec=(t,a)=>a.length?`<h2>${t} (${a.length})</h2><div class="card">${a.map(e=>rowHTML(e,true)).join('')}</div>`:'';
+  let h=sec('เลยกำหนด',G.over)+sec('วันนี้',G.today)+sec('7 วันข้างหน้า',G.week)+sec('ภายหลัง',G.later)+sec('ไม่มีกำหนดวัน',G.none);
+  if(ST.done){const d=ts.filter(t=>t.done).sort((a,b)=>String(b.done_at).localeCompare(String(a.done_at)));h+=sec('เสร็จแล้ว',d.map(t=>({kind:'task',t,id:t.id,date:t.due_date||'',time:'',done:true})))}
+  $('tl').innerHTML=h||'<div class="card"><p class="mut">ไม่มีงานที่ตรงกับเงื่อนไข กด "+ เพิ่มงาน" เพื่อเริ่ม</p></div>'}
+
+function openTask(id){const t=TK.find(x=>x.id===id);if(!t)return;const s=t.subtasks||[];
+  openSheet(`<div style="display:flex;gap:10px;align-items:center"><button class="ck${t.done?' on':''}" aria-label="ทำเสร็จ" onclick="toggleDone('${t.id}',event,true)" style="border-color:${PC[t.priority]}"></button><h2 style="margin:0;flex:1">${esc(t.title)}</h2></div>
+  ${t.notes?`<p style="white-space:pre-wrap">${esc(t.notes)}</p>`:''}
+  <div class="card" style="margin:12px 0"><div class="row"><span>วันที่</span><span>${t.due_date?fd(t.due_date)+(t.due_time?' '+t.due_time.slice(0,5):''):'ไม่กำหนด'}</span></div><div class="row"><span>ลิสต์</span><span>${esc(listName(t))}</span></div>
+  <div class="row"><span>ความสำคัญ</span><b style="color:${PC[t.priority]}">${PL[t.priority]}</b></div><div class="row"><span>ทำซ้ำ</span><span>${RL[t.repeat_rule]}</span></div>${(t.tags||[]).length?`<div class="row"><span>แท็ก</span><span>${t.tags.map(x=>'#'+esc(x)).join(' ')}</span></div>`:''}</div>
+  ${s.length?`<h2>รายการย่อย</h2><div class="card">${s.map((x,i)=>`<div class="item" onclick="toggleSub('${t.id}',${i})"><button class="ck${x.done?' on':''}" aria-label="ติ๊ก" style="border-color:var(--pri)"></button><div class="grow${x.done?' fin':''}"><span class="ti">${esc(x.t)}</span></div></div>`).join('')}</div>`:''}
+  <div class="btns" style="margin-top:14px"><button class="del" onclick="delTask('${t.id}')">ลบ</button><button class="ghost" onclick="openTaskForm('${t.id}')">แก้ไข</button><button class="pri" onclick="closeSheet()">ปิด</button></div>`)}
+async function toggleSub(id,i){const t=TK.find(x=>x.id===id),s=(t.subtasks||[]).map((x,j)=>j===i?{...x,done:!x.done}:x);
+  await q(sb.from('tasks').update({subtasks:s}).eq('id',id));t.subtasks=s;openTask(id);render()}
+async function toggleDone(id,ev,fromSheet){if(ev)ev.stopPropagation();const t=TK.find(x=>x.id===id);let row;
+  if(t.repeat_rule!=='none'&&t.due_date){const n=t.repeat_rule==='daily'?addDays(t.due_date,1):t.repeat_rule==='weekly'?addDays(t.due_date,7):addMonthKeep(t.due_date,1);row={due_date:n,subtasks:(t.subtasks||[]).map(x=>({...x,done:false}))}}
+  else row={done:!t.done,done_at:!t.done?new Date().toISOString():null};
+  await q(sb.from('tasks').update(row).eq('id',id));Object.assign(t,row);render();if(fromSheet)openTask(id)}
+async function delTask(id){if(!confirm('ลบงานนี้?'))return;await q(sb.from('tasks').update({deleted_at:new Date().toISOString()}).eq('id',id));closeSheet();await load()}
+function openTaskForm(id,pre){const t=id?TK.find(x=>x.id===id):{title:'',notes:'',due_date:pre||'',due_time:'',priority:0,list_id:'',tags:[],subtasks:[],repeat_rule:'none'};
+  openSheet(`<h2 style="margin-top:0">${id?'แก้ไขงาน':'เพิ่มงาน'}</h2><label>ชื่องาน<input id="tt" value="${esc(t.title)}"></label><label>รายละเอียด<textarea id="tn">${esc(t.notes||'')}</textarea></label>
+  <label>วันที่<input id="td" type="date" value="${t.due_date||''}"></label><label>เวลา (ไม่บังคับ)<input id="tm" type="time" value="${t.due_time?t.due_time.slice(0,5):''}"></label>
+  <label>ความสำคัญ<select id="tp">${PL.map((l,i)=>`<option value="${i}"${i===t.priority?' selected':''}>${l}</option>`).join('')}</select></label>
+  <label>ลิสต์<select id="tl2"><option value="">ไม่มีลิสต์</option>${LS.map(l=>`<option value="${l.id}"${l.id===t.list_id?' selected':''}>${esc(l.name)}</option>`).join('')}</select></label>
+  <label>แท็ก (คั่นด้วยเครื่องหมายจุลภาค)<input id="tg" value="${esc((t.tags||[]).join(', '))}"></label>
+  <label>ทำซ้ำ<select id="tr">${Object.keys(RL).map(k=>`<option value="${k}"${k===t.repeat_rule?' selected':''}>${RL[k]}</option>`).join('')}</select></label>
+  <label>รายการย่อย (บรรทัดละ 1 รายการ)<textarea id="ts">${esc((t.subtasks||[]).map(s=>s.t).join('\n'))}</textarea></label><div class="err" id="te"></div>
+  <div class="btns"><button class="ghost" onclick="${id?`openTask('${id}')`:'closeSheet()'}">ยกเลิก</button><button class="pri" onclick="saveTask('${id||''}')">บันทึก</button></div>`)}
+async function saveTask(id){const title=$('tt').value.trim();if(!title){$('te').textContent='ใส่ชื่องาน';return}
+  const old=id?TK.find(x=>x.id===id):null,oldS=old?old.subtasks||[]:[],rep=$('tr').value,due=$('td').value||null;
+  if(rep!=='none'&&!due){$('te').textContent='งานที่ทำซ้ำต้องมีวันที่';return}
+  const subs=$('ts').value.split('\n').map(x=>x.trim()).filter(Boolean).map(x=>({t:x,done:!!(oldS.find(o=>o.t===x)||{}).done}));
+  const row={title,notes:$('tn').value.trim()||null,due_date:due,due_time:$('tm').value||null,priority:Number($('tp').value),list_id:$('tl2').value||null,tags:$('tg').value.split(',').map(x=>x.trim().replace(/^#/,'')).filter(Boolean),subtasks:subs,repeat_rule:rep};
+  if(id)await q(sb.from('tasks').update(row).eq('id',id));else await q(sb.from('tasks').insert(row));closeSheet();await load()}
+function openLists(){openSheet(`<h2 style="margin-top:0">จัดการลิสต์</h2><div class="card" style="margin-bottom:12px">${LS.length?LS.map(l=>`<div class="row"><span><span class="dot" style="display:inline-block;background:${l.color}"></span> ${esc(l.name)}</span><span style="display:flex;gap:6px"><button class="ghost" style="min-height:38px" onclick="renameList('${l.id}')">แก้ชื่อ</button><button class="del" style="min-height:38px" onclick="delList('${l.id}')">ลบ</button></span></div>`).join(''):'<p class="mut">ยังไม่มีลิสต์</p>'}</div>
+  <label>ชื่อลิสต์ใหม่ (เช่น งานร้าน, ส่วนตัว)<input id="ln"></label><label>สี<select id="lc">${COLORS.map((c,i)=>`<option value="${c}">${CN[i]}</option>`).join('')}</select></label>
+  <div class="btns"><button class="ghost" onclick="closeSheet()">ปิด</button><button class="pri" onclick="addList()">+ เพิ่มลิสต์</button></div>`)}
+async function addList(){const n=$('ln').value.trim();if(!n)return;await q(sb.from('task_lists').insert({name:n,color:$('lc').value,display_order:LS.length+1}));await load();openLists()}
+async function renameList(id){const l=LS.find(x=>x.id===id),n=prompt('ชื่อลิสต์',l.name);if(!n||!n.trim())return;await q(sb.from('task_lists').update({name:n.trim()}).eq('id',id));await load();openLists()}
+async function delList(id){if(!confirm('ลบลิสต์นี้? งานในลิสต์จะยังอยู่ แต่เป็น "ไม่มีลิสต์"'))return;await q(sb.from('task_lists').update({deleted_at:new Date().toISOString()}).eq('id',id));await load();openLists()}
+function openMenu(){openSheet(`<h2 style="margin-top:0">เมนู</h2><button class="ghost" style="width:100%;margin-bottom:10px" onclick="location.href='index.html'">การเงิน (บัญชี รายรับ-รายจ่าย ลงทุน)</button><button class="pri" style="width:100%;margin-bottom:10px" onclick="closeSheet()">ปฏิทินและงาน (หน้านี้)</button><button class="ghost" style="width:100%" onclick="closeSheet()">ปิด</button>`)}
+init();
+</script>
+</body>
+</html>
