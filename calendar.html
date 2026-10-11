@@ -48,9 +48,9 @@ label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mut)
 <script>
 const SB_URL='https://etqgjkeyoxgfncphtiao.supabase.co',SB_KEY='sb_publishable_adz6BHqdK99sKdBnJsNk-g_PRRhpYTj';
 const DOW=['อา','จ','อ','พ','พฤ','ศ','ส'],MN=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
-const PC=['#B9B0D0','#3F7FBF','#C98A2B','#C0392B'],PL=['ไม่มี','ต่ำ','กลาง','สูง'],RL={none:'ไม่ทำซ้ำ',daily:'ทุกวัน',weekly:'ทุกสัปดาห์',monthly:'ทุกเดือน'};
+const PC=['#B9B0D0','#3F7FBF','#C98A2B','#C0392B'],PL=['ไม่มี','ต่ำ','กลาง','สูง'],RL={none:'ไม่ทำซ้ำ',daily:'ทุกวัน',weekly:'ทุกสัปดาห์',monthly:'ทุกเดือน',bimonthly:'เดือนเว้นเดือน',yearly:'ทุกปี'},STEP={monthly:1,bimonthly:2,yearly:12};
 const COLORS=['#7457C2','#D9669A','#3D8F6B','#C98A2B','#3F7FBF','#8C6B55'],CN=['ม่วง','ชมพู','เขียว','เหลือง','ฟ้า','น้ำตาล'];
-let sb,TK=[],LS=[],IP=[],II=[],AC=[],ST={tab:'cal',view:'month',cur:new Date(),q:'',fl:'',fp:'',ft:'',done:false};
+let sb,TK=[],LS=[],IP=[],II=[],AC=[],IM=[],QDONE=false,ST={tab:'cal',view:'month',cur:new Date(),q:'',fl:'',fp:'',ft:'',done:false};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>'฿'+Number(n).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -77,16 +77,25 @@ async function load(){
   TK=await q(sb.from('tasks').select('*').is('deleted_at',null));
   const a=await sb.from('accounts').select('id,nickname');AC=a.error?[]:a.data;
   const p=await sb.from('installment_plans').select('*'),i=await sb.from('installment_items').select('*').is('paid_txn_id',null);
-  IP=p.error?[]:p.data;II=i.error?[]:i.data;render();
+  IP=p.error?[]:p.data;II=i.error?[]:i.data;
+  const im=await sb.from('important_dates').select('*').is('deleted_at',null);IM=im.error?[]:im.data;render();
+  if(!QDONE){QDONE=true;const P=new URLSearchParams(location.search);if(P.get('dates'))openDates()}
 }
+const diffDays=(a,b)=>Math.round((pd(a)-pd(b))/864e5);
+const cdText=d=>d===0?'วันนี้':d>0?`อีก ${d} วัน`:`ผ่านมา ${-d} วัน`;
+function impNext(x){const today=ymdOf(new Date());if(!x.repeat_yearly)return{date:x.date_on,days:diffDays(x.date_on,today)};
+  const[,m,d]=x.date_on.split('-').map(Number),mk=yy=>ymdOf(new Date(yy,m-1,Math.min(d,new Date(yy,m,0).getDate())));let Y=new Date().getFullYear(),o=mk(Y);if(o<today)o=mk(Y+1);return{date:o,days:diffDays(o,today)}}
+function impOn(x,k){if(x.date_on===k)return true;if(!x.repeat_yearly||k<x.date_on)return false;const[Y,M,D]=k.split('-').map(Number),[,m0,d0]=x.date_on.split('-').map(Number);return M===m0&&D===Math.min(d0,new Date(Y,M,0).getDate())}
 function occurs(t,k){if(!t.due_date||k<t.due_date)return false;if(k===t.due_date)return true;const r=t.repeat_rule;
   if(r==='daily')return true;if(r==='weekly')return pd(k).getDay()===pd(t.due_date).getDay();
-  if(r==='monthly'){const[Y,M,D]=k.split('-').map(Number),d0=Number(t.due_date.split('-')[2]);return D===Math.min(d0,new Date(Y,M,0).getDate())}return false}
+  const st=STEP[r];if(st){const[Y,M,D]=k.split('-').map(Number),[y0,m0,d0]=t.due_date.split('-').map(Number);return((Y-y0)*12+(M-m0))%st===0&&D===Math.min(d0,new Date(Y,M,0).getDate())}return false}
 function itemsOn(k){const r=[];
   for(const t of TK){if(!occurs(t,k))continue;r.push({kind:'task',id:t.id,t,time:t.due_time?t.due_time.slice(0,5):'',done:t.done&&t.repeat_rule==='none'})}
   for(const i of II){if(i.due_date!==k)continue;const p=IP.find(x=>x.id===i.plan_id);if(p)r.push({kind:'inst',id:i.id,title:`ผ่อน ${p.title} งวด ${i.seq}/${p.months}`,time:'',amt:i.amount,card:nmA(p.card_account_id)})}
+  for(const x of IM){if(impOn(x,k))r.push({kind:'imp',id:x.id,x,title:x.title,time:''})}
   return r.sort((a,b)=>(a.time||'').localeCompare(b.time||''))}
 function rowHTML(it,showDate){
+  if(it.kind==='imp'){const n=impNext(it.x);return `<div class="item" onclick="openImpForm('${it.id}')"><span class="dot" style="background:#C98A2B"></span><div class="grow"><div>★ ${esc(it.title)}</div><div class="mut">วันสำคัญ${it.x.repeat_yearly?' · ทุกปี':''} · ${cdText(n.days)}</div></div></div>`}
   if(it.kind==='inst')return `<div class="item" onclick="instInfo('${it.id}')"><span class="dot" style="background:#D9669A"></span><div class="grow"><div>${esc(it.title)}</div><div class="mut">${showDate&&it.date?fd(it.date)+' · ':''}บัตร ${esc(it.card)} · ${fmt(it.amt)}</div></div></div>`;
   const t=it.t;return `<div class="item${it.done?' fin':''}" onclick="openTask('${t.id}')"><button class="ck${it.done?' on':''}" aria-label="ทำเสร็จ" onclick="toggleDone('${t.id}',event)" style="border-color:${PC[t.priority]}"></button><div class="grow"><div class="ti">${esc(t.title)}</div><div class="mut"><span class="dot" style="display:inline-block;width:8px;height:8px;background:${colorOf(t)}"></span> ${showDate&&t.due_date?fd(t.due_date)+' · ':''}${it.time?it.time+' · ':''}${esc(listName(t))}${t.repeat_rule!=='none'?' · ↻ '+RL[t.repeat_rule]:''}${(t.tags||[]).map(x=>' #'+esc(x)).join('')}${chk(t)}</div></div></div>`}
 
@@ -95,7 +104,7 @@ function render(){
   let h=`<div class="top"><button class="ghost" aria-label="เมนู" onclick="openMenu()" style="font-size:20px">☰</button><h1>ปฏิทินและงาน</h1></div>
   <div class="tabs"><button class="chip${cal?' on':''}" onclick="setTab('cal')">ปฏิทิน</button><button class="chip${!cal?' on':''}" onclick="setTab('tasks')">งานทั้งหมด</button></div>`;
   if(cal){
-    h+=`<div class="hf">${[['month','เดือน'],['week','สัปดาห์'],['day','วัน']].map(([v,l])=>`<button class="chip${ST.view===v?' on':''}" onclick="setView('${v}')">${l}</button>`).join('')}</div>
+    h+=`<div class="hf">${[['month','เดือน'],['week','สัปดาห์'],['day','วัน']].map(([v,l])=>`<button class="chip${ST.view===v?' on':''}" onclick="setView('${v}')">${l}</button>`).join('')}<button class="chip" onclick="openDates()">★ วันสำคัญ</button></div>
     <div class="nav"><button class="ghost" onclick="shift(-1)" aria-label="ก่อนหน้า">◀</button><div class="b">${navTitle()}</div><button class="ghost" onclick="shift(1)" aria-label="ถัดไป">▶</button><button onclick="ST.cur=new Date();render()">วันนี้</button></div>`;
     h+=ST.view==='month'?monthView():ST.view==='week'?weekView():dayView();
   }else h+=taskTab();
@@ -108,14 +117,14 @@ function navTitle(){const c=ST.cur;if(ST.view==='month')return `${MN[c.getMonth(
   if(ST.view==='day')return fd(ymdOf(c));const s=new Date(c.getFullYear(),c.getMonth(),c.getDate()-c.getDay()),e=new Date(s.getFullYear(),s.getMonth(),s.getDate()+6);return `${s.getDate()} ${MN[s.getMonth()].slice(0,3)}. – ${e.getDate()} ${MN[e.getMonth()].slice(0,3)}. ${e.getFullYear()+543}`}
 function monthView(){const c=ST.cur,y=c.getFullYear(),m=c.getMonth(),start=new Date(y,m,1-new Date(y,m,1).getDay()),today=ymdOf(new Date());
   let h=`<div class="dow">${DOW.map(d=>`<div>${d}</div>`).join('')}</div><div class="grid">`;
-  for(let i=0;i<42;i++){const d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i),k=ymdOf(d),its=itemsOn(k),cl=it=>it.kind==='inst'?'#D9669A':colorOf(it.t);
-    h+=`<div class="cell${d.getMonth()!==m?' out':''}${k===today?' today':''}" onclick="openDayItems('${k}')"><div class="dnum">${d.getDate()}</div><div class="dots">${its.slice(0,4).map(it=>`<i style="background:${cl(it)}"></i>`).join('')}${its.length>4?'<span class="mut">+</span>':''}</div><div class="titles">${its.slice(0,2).map(it=>`<div class="tt" style="border-left:3px solid ${cl(it)}">${esc(it.kind==='inst'?it.title:it.t.title)}</div>`).join('')}${its.length>2?`<div class="mut">+${its.length-2}</div>`:''}</div></div>`}
+  for(let i=0;i<42;i++){const d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i),k=ymdOf(d),its=itemsOn(k),cl=it=>it.kind==='inst'?'#D9669A':it.kind==='imp'?'#C98A2B':colorOf(it.t);
+    h+=`<div class="cell${d.getMonth()!==m?' out':''}${k===today?' today':''}" onclick="openDayItems('${k}')"><div class="dnum">${d.getDate()}</div><div class="dots">${its.slice(0,4).map(it=>`<i style="background:${cl(it)}"></i>`).join('')}${its.length>4?'<span class="mut">+</span>':''}</div><div class="titles">${its.slice(0,2).map(it=>`<div class="tt" style="border-left:3px solid ${cl(it)}">${esc(it.kind==='task'?it.t.title:(it.kind==='imp'?'★ ':'')+it.title)}</div>`).join('')}${its.length>2?`<div class="mut">+${its.length-2}</div>`:''}</div></div>`}
   return h+'</div>'}
 function weekView(){const c=ST.cur,s=new Date(c.getFullYear(),c.getMonth(),c.getDate()-c.getDay()),today=ymdOf(new Date());let h='';
   for(let i=0;i<7;i++){const k=ymdOf(new Date(s.getFullYear(),s.getMonth(),s.getDate()+i)),its=itemsOn(k);
     h+=`<h2 style="${k===today?'color:var(--pri)':''}">${fd(k)}${k===today?' (วันนี้)':''}</h2><div class="card">${its.length?its.map(it=>rowHTML(it)).join(''):'<p class="mut">ไม่มีรายการ</p>'}</div>`}return h}
 function dayView(){const k=ymdOf(ST.cur),its=itemsOn(k);return `<div class="card">${its.length?its.map(it=>rowHTML(it)).join(''):'<p class="mut">ไม่มีรายการในวันนี้ กด "+ เพิ่มงาน" ได้เลย</p>'}</div>`}
-function openDayItems(k){const its=itemsOn(k);openSheet(`<h2 style="margin-top:0">${fd(k)}</h2><div class="card" style="margin-bottom:12px">${its.length?its.map(it=>rowHTML(it)).join(''):'<p class="mut">ไม่มีรายการ</p>'}</div><div class="btns"><button class="ghost" onclick="closeSheet()">ปิด</button><button class="pri" onclick="openTaskForm('','${k}')">+ เพิ่มงานวันนี้</button></div>`)}
+function openDayItems(k){const its=itemsOn(k);openSheet(`<h2 style="margin-top:0">${fd(k)}</h2><div class="card" style="margin-bottom:12px">${its.length?its.map(it=>rowHTML(it)).join(''):'<p class="mut">ไม่มีรายการ</p>'}</div><div class="btns"><button class="ghost" onclick="closeSheet()">ปิด</button><button class="ghost" onclick="openImpForm('','${k}')">★ วันสำคัญ</button><button class="pri" onclick="openTaskForm('','${k}')">+ เพิ่มงาน</button></div>`)}
 function instInfo(id){const i=II.find(x=>x.id===id),p=IP.find(x=>x.id===i.plan_id);
   openSheet(`<h2 style="margin-top:0">ผ่อนชำระ · ${esc(p.title)}</h2><div class="card"><div class="row"><span>บัตร</span><b>${esc(nmA(p.card_account_id))}</b></div><div class="row"><span>งวดที่</span><span>${i.seq}/${p.months}</span></div><div class="row"><span>ครบกำหนด</span><span>${fd(i.due_date)}</span></div><div class="row"><span>ยอดงวดนี้</span><b>${fmt(i.amount)}</b></div></div><p class="mut">รายการนี้มาจากแอปการเงินอัตโนมัติ กด "จ่ายแล้ว" ได้ที่หน้าการเงิน (บัตร → แสดงรายการผ่อนชำระ)</p><div class="btns"><button class="ghost" onclick="closeSheet()">ปิด</button><button class="pri" onclick="location.href='index.html'">ไปหน้าการเงิน</button></div>`)}
 
@@ -142,38 +151,68 @@ function openTask(id){const t=TK.find(x=>x.id===id);if(!t)return;const s=t.subta
   openSheet(`<div style="display:flex;gap:10px;align-items:center"><button class="ck${t.done?' on':''}" aria-label="ทำเสร็จ" onclick="toggleDone('${t.id}',event,true)" style="border-color:${PC[t.priority]}"></button><h2 style="margin:0;flex:1">${esc(t.title)}</h2></div>
   ${t.notes?`<p style="white-space:pre-wrap">${esc(t.notes)}</p>`:''}
   <div class="card" style="margin:12px 0"><div class="row"><span>วันที่</span><span>${t.due_date?fd(t.due_date)+(t.due_time?' '+t.due_time.slice(0,5):''):'ไม่กำหนด'}</span></div><div class="row"><span>ลิสต์</span><span>${esc(listName(t))}</span></div>
-  <div class="row"><span>ความสำคัญ</span><b style="color:${PC[t.priority]}">${PL[t.priority]}</b></div><div class="row"><span>ทำซ้ำ</span><span>${RL[t.repeat_rule]}</span></div>${(t.tags||[]).length?`<div class="row"><span>แท็ก</span><span>${t.tags.map(x=>'#'+esc(x)).join(' ')}</span></div>`:''}</div>
+  <div class="row"><span>ความสำคัญ</span><b style="color:${PC[t.priority]}">${PL[t.priority]}</b></div><div class="row"><span>ทำซ้ำ</span><span>${RL[t.repeat_rule]}</span></div><div class="row"><span>เตือนที่หน้าแรก</span><span>${t.remind_before?'ล่วงหน้า '+t.remind_before+' วัน':'ตรงวันครบกำหนด'}</span></div>${(t.tags||[]).length?`<div class="row"><span>แท็ก</span><span>${t.tags.map(x=>'#'+esc(x)).join(' ')}</span></div>`:''}</div>
   ${s.length?`<h2>รายการย่อย</h2><div class="card">${s.map((x,i)=>`<div class="item" onclick="toggleSub('${t.id}',${i})"><button class="ck${x.done?' on':''}" aria-label="ติ๊ก" style="border-color:var(--pri)"></button><div class="grow${x.done?' fin':''}"><span class="ti">${esc(x.t)}</span></div></div>`).join('')}</div>`:''}
   <div class="btns" style="margin-top:14px"><button class="del" onclick="delTask('${t.id}')">ลบ</button><button class="ghost" onclick="openTaskForm('${t.id}')">แก้ไข</button><button class="pri" onclick="closeSheet()">ปิด</button></div>`)}
 async function toggleSub(id,i){const t=TK.find(x=>x.id===id),s=(t.subtasks||[]).map((x,j)=>j===i?{...x,done:!x.done}:x);
   await q(sb.from('tasks').update({subtasks:s}).eq('id',id));t.subtasks=s;openTask(id);render()}
 async function toggleDone(id,ev,fromSheet){if(ev)ev.stopPropagation();const t=TK.find(x=>x.id===id);let row;
-  if(t.repeat_rule!=='none'&&t.due_date){const n=t.repeat_rule==='daily'?addDays(t.due_date,1):t.repeat_rule==='weekly'?addDays(t.due_date,7):addMonthKeep(t.due_date,1);row={due_date:n,subtasks:(t.subtasks||[]).map(x=>({...x,done:false}))}}
+  if(t.repeat_rule!=='none'&&t.due_date){const n=t.repeat_rule==='daily'?addDays(t.due_date,1):t.repeat_rule==='weekly'?addDays(t.due_date,7):addMonthKeep(t.due_date,STEP[t.repeat_rule]||1);row={due_date:n,subtasks:(t.subtasks||[]).map(x=>({...x,done:false}))}}
   else row={done:!t.done,done_at:!t.done?new Date().toISOString():null};
   await q(sb.from('tasks').update(row).eq('id',id));Object.assign(t,row);render();if(fromSheet)openTask(id)}
 async function delTask(id){if(!confirm('ลบงานนี้?'))return;await q(sb.from('tasks').update({deleted_at:new Date().toISOString()}).eq('id',id));closeSheet();await load()}
-function openTaskForm(id,pre){const t=id?TK.find(x=>x.id===id):{title:'',notes:'',due_date:pre||'',due_time:'',priority:0,list_id:'',tags:[],subtasks:[],repeat_rule:'none'};
+function openTaskForm(id,pre){const t=id?TK.find(x=>x.id===id):{title:'',notes:'',due_date:pre||'',due_time:'',priority:0,list_id:'',tags:[],subtasks:[],repeat_rule:'none',remind_before:0};
   openSheet(`<h2 style="margin-top:0">${id?'แก้ไขงาน':'เพิ่มงาน'}</h2><label>ชื่องาน<input id="tt" value="${esc(t.title)}"></label><label>รายละเอียด<textarea id="tn">${esc(t.notes||'')}</textarea></label>
   <label>วันที่<input id="td" type="date" value="${t.due_date||''}"></label><label>เวลา (ไม่บังคับ)<input id="tm" type="time" value="${t.due_time?t.due_time.slice(0,5):''}"></label>
   <label>ความสำคัญ<select id="tp">${PL.map((l,i)=>`<option value="${i}"${i===t.priority?' selected':''}>${l}</option>`).join('')}</select></label>
-  <label>ลิสต์<select id="tl2"><option value="">ไม่มีลิสต์</option>${LS.map(l=>`<option value="${l.id}"${l.id===t.list_id?' selected':''}>${esc(l.name)}</option>`).join('')}</select></label>
+  <label>ลิสต์ (หมวดหมู่ของงาน)<select id="tl2" onchange="listSel(this)"><option value="">ไม่มีลิสต์</option>${LS.map(l=>`<option value="${l.id}"${l.id===t.list_id?' selected':''}>${esc(l.name)}</option>`).join('')}<option value="__new">+ สร้างลิสต์ใหม่…</option></select></label>
+  <div class="mut" style="margin:-6px 0 10px">ลิสต์คือหมวดหมู่ที่ใช้แยกงานเป็นกลุ่ม เช่น งานร้าน ส่วนตัว ครอบครัว งานจะมีสีของลิสต์ในปฏิทิน และกรองดูเฉพาะลิสต์ได้ ไม่เลือกก็ได้</div>
   <label>แท็ก (คั่นด้วยเครื่องหมายจุลภาค)<input id="tg" value="${esc((t.tags||[]).join(', '))}"></label>
   <label>ทำซ้ำ<select id="tr">${Object.keys(RL).map(k=>`<option value="${k}"${k===t.repeat_rule?' selected':''}>${RL[k]}</option>`).join('')}</select></label>
+  <label>เตือนที่หน้าแรกของแอปการเงิน<select id="tb">${[[0,'ตรงวันครบกำหนด'],[1,'ล่วงหน้า 1 วัน'],[3,'ล่วงหน้า 3 วัน'],[7,'ล่วงหน้า 7 วัน']].map(([v,l])=>`<option value="${v}"${v===(t.remind_before||0)?' selected':''}>${l}</option>`).join('')}</select></label>
   <label>รายการย่อย (บรรทัดละ 1 รายการ)<textarea id="ts">${esc((t.subtasks||[]).map(s=>s.t).join('\n'))}</textarea></label><div class="err" id="te"></div>
   <div class="btns"><button class="ghost" onclick="${id?`openTask('${id}')`:'closeSheet()'}">ยกเลิก</button><button class="pri" onclick="saveTask('${id||''}')">บันทึก</button></div>`)}
+async function listSel(el){if(el.value!=='__new')return;const n=prompt('ชื่อลิสต์ใหม่ (เช่น งานร้าน, ส่วนตัว)');if(!n||!n.trim()){el.value='';return}
+  const l=await q(sb.from('task_lists').insert({name:n.trim(),color:COLORS[LS.length%COLORS.length],display_order:LS.length+1}).select().single());LS.push(l);
+  el.innerHTML='<option value="">ไม่มีลิสต์</option>'+LS.map(x=>`<option value="${x.id}"${x.id===l.id?' selected':''}>${esc(x.name)}</option>`).join('')+'<option value="__new">+ สร้างลิสต์ใหม่…</option>'}
 async function saveTask(id){const title=$('tt').value.trim();if(!title){$('te').textContent='ใส่ชื่องาน';return}
   const old=id?TK.find(x=>x.id===id):null,oldS=old?old.subtasks||[]:[],rep=$('tr').value,due=$('td').value||null;
   if(rep!=='none'&&!due){$('te').textContent='งานที่ทำซ้ำต้องมีวันที่';return}
-  const subs=$('ts').value.split('\n').map(x=>x.trim()).filter(Boolean).map(x=>({t:x,done:!!(oldS.find(o=>o.t===x)||{}).done}));
-  const row={title,notes:$('tn').value.trim()||null,due_date:due,due_time:$('tm').value||null,priority:Number($('tp').value),list_id:$('tl2').value||null,tags:$('tg').value.split(',').map(x=>x.trim().replace(/^#/,'')).filter(Boolean),subtasks:subs,repeat_rule:rep};
+  const subs=$('ts').value.split('\n').map(x=>x.trim()).filter(Boolean).map(x=>({t:x,done:!!(oldS.find(o=>o.t===x)||{}).done})),lv=$('tl2').value;
+  const row={title,notes:$('tn').value.trim()||null,due_date:due,due_time:$('tm').value||null,priority:Number($('tp').value),list_id:lv&&lv!=='__new'?lv:null,tags:$('tg').value.split(',').map(x=>x.trim().replace(/^#/,'')).filter(Boolean),subtasks:subs,repeat_rule:rep,remind_before:Number($('tb').value)};
   if(id)await q(sb.from('tasks').update(row).eq('id',id));else await q(sb.from('tasks').insert(row));closeSheet();await load()}
-function openLists(){openSheet(`<h2 style="margin-top:0">จัดการลิสต์</h2><div class="card" style="margin-bottom:12px">${LS.length?LS.map(l=>`<div class="row"><span><span class="dot" style="display:inline-block;background:${l.color}"></span> ${esc(l.name)}</span><span style="display:flex;gap:6px"><button class="ghost" style="min-height:38px" onclick="renameList('${l.id}')">แก้ชื่อ</button><button class="del" style="min-height:38px" onclick="delList('${l.id}')">ลบ</button></span></div>`).join(''):'<p class="mut">ยังไม่มีลิสต์</p>'}</div>
-  <label>ชื่อลิสต์ใหม่ (เช่น งานร้าน, ส่วนตัว)<input id="ln"></label><label>สี<select id="lc">${COLORS.map((c,i)=>`<option value="${c}">${CN[i]}</option>`).join('')}</select></label>
-  <div class="btns"><button class="ghost" onclick="closeSheet()">ปิด</button><button class="pri" onclick="addList()">+ เพิ่มลิสต์</button></div>`)}
-async function addList(){const n=$('ln').value.trim();if(!n)return;await q(sb.from('task_lists').insert({name:n,color:$('lc').value,display_order:LS.length+1}));await load();openLists()}
-async function renameList(id){const l=LS.find(x=>x.id===id),n=prompt('ชื่อลิสต์',l.name);if(!n||!n.trim())return;await q(sb.from('task_lists').update({name:n.trim()}).eq('id',id));await load();openLists()}
+const SUG=[['งานร้าน','งานเกี่ยวกับร้านค้า เช่น สั่งของ นัดลูกค้า ปิดยอด',COLORS[4]],['ส่วนตัว','เรื่องส่วนตัวทั่วไป',COLORS[0]],['ครอบครัว','เรื่องของคนในครอบครัว นัดหมาย โรงเรียน',COLORS[1]],['การเงิน/บิล','จ่ายบิล ผ่อนชำระ ภาษี ประกัน',COLORS[3]],['สุขภาพ','พบแพทย์ ตรวจสุขภาพ ออกกำลังกาย',COLORS[2]],['ซื้อของ','รายการซื้อของใช้ ของเข้าร้าน',COLORS[5]],['เดินทาง','ทริป ตั๋ว ที่พัก',COLORS[4]]];
+function openLists(){const cnt=id=>TK.filter(t=>t.list_id===id&&!t.done).length,sug=SUG.map((x,i)=>[x,i]).filter(([x])=>!LS.some(l=>l.name===x[0]));
+  openSheet(`<h2 style="margin-top:0">จัดการลิสต์ (หมวดหมู่งาน)</h2><p class="mut">ลิสต์คือ "หมวดหมู่" ที่ใช้แยกงานเป็นกลุ่ม เช่น งานร้าน ส่วนตัว ครอบครัว เมื่อเลือกลิสต์ให้งาน งานจะมีสีของลิสต์ในปฏิทิน และกรองดูเฉพาะลิสต์ได้ในแท็บ "งานทั้งหมด" งานจะไม่มีลิสต์ก็ได้</p>
+  <div class="card" style="margin-bottom:12px">${LS.length?LS.map(l=>`<div class="row"><div class="grow"><div><span class="dot" style="display:inline-block;background:${l.color}"></span> <b>${esc(l.name)}</b> <span class="mut">· ${cnt(l.id)} งานค้าง</span></div>${l.description?`<div class="mut">${esc(l.description)}</div>`:''}</div><span style="display:flex;gap:6px"><button class="ghost" style="min-height:38px" onclick="openListForm('${l.id}')">แก้ไข</button><button class="del" style="min-height:38px" onclick="delList('${l.id}')">ลบ</button></span></div>`).join(''):'<p class="mut">ยังไม่มีลิสต์</p>'}</div>
+  ${sug.length?`<h2>ลิสต์แนะนำ (กดเพื่อเพิ่มทันที)</h2><div class="hf">${sug.map(([x,i])=>`<button class="chip" onclick="quickList(${i})">+ ${x[0]}</button>`).join('')}</div>`:''}
+  <div class="btns"><button class="ghost" onclick="closeSheet()">ปิด</button><button class="pri" onclick="openListForm()">+ สร้างลิสต์เอง</button></div>`)}
+async function quickList(i){const x=SUG[i];await q(sb.from('task_lists').insert({name:x[0],description:x[1],color:x[2],display_order:LS.length+1}));await load();openLists()}
+function openListForm(id){const l=id?LS.find(x=>x.id===id):{name:'',color:COLORS[0],description:''};
+  openSheet(`<h2 style="margin-top:0">${id?'แก้ไขลิสต์':'สร้างลิสต์'}</h2><label>ชื่อลิสต์ (เช่น งานร้าน, ส่วนตัว)<input id="ln" value="${esc(l.name)}"></label>
+  <label>สี (ใช้แสดงในปฏิทิน)<select id="lc">${COLORS.map((c,i)=>`<option value="${c}"${c===l.color?' selected':''}>${CN[i]}</option>`).join('')}</select></label>
+  <label>คำอธิบายลิสต์ (ไม่บังคับ เช่น ลิสต์นี้ใช้เก็บอะไร)<textarea id="ld">${esc(l.description||'')}</textarea></label><div class="err" id="le"></div>
+  <div class="btns"><button class="ghost" onclick="openLists()">ยกเลิก</button><button class="pri" onclick="saveList('${id||''}')">บันทึก</button></div>`)}
+async function saveList(id){const n=$('ln').value.trim();if(!n){$('le').textContent='ใส่ชื่อลิสต์';return}
+  const row={name:n,color:$('lc').value,description:$('ld').value.trim()||null};
+  if(id)await q(sb.from('task_lists').update(row).eq('id',id));else await q(sb.from('task_lists').insert({...row,display_order:LS.length+1}));await load();openLists()}
 async function delList(id){if(!confirm('ลบลิสต์นี้? งานในลิสต์จะยังอยู่ แต่เป็น "ไม่มีลิสต์"'))return;await q(sb.from('task_lists').update({deleted_at:new Date().toISOString()}).eq('id',id));await load();openLists()}
-function openMenu(){openSheet(`<h2 style="margin-top:0">เมนู</h2><button class="ghost" style="width:100%;margin-bottom:10px" onclick="location.href='index.html'">การเงิน (บัญชี รายรับ-รายจ่าย ลงทุน)</button><button class="pri" style="width:100%;margin-bottom:10px" onclick="closeSheet()">ปฏิทินและงาน (หน้านี้)</button><button class="ghost" style="width:100%" onclick="closeSheet()">ปิด</button>`)}
+function openDates(){const L2=IM.map(x=>({x,n:impNext(x)})).sort((a,b)=>((a.n.days<0)-(b.n.days<0))||(Math.abs(a.n.days)-Math.abs(b.n.days)));
+  openSheet(`<h2 style="margin-top:0">★ วันสำคัญ · นับถอยหลัง</h2><p class="mut">ใส่วันสำคัญ เช่น วันเกิด ครบรอบ วันสอบ ระบบนับถอยหลังให้ และเตือนที่หน้าแรกของแอปการเงินเมื่อใกล้ถึงวัน</p>
+  <div class="card" style="margin-bottom:12px">${L2.length?L2.map(({x,n})=>`<div class="row" onclick="openImpForm('${x.id}')" style="cursor:pointer"><div class="grow"><div class="b">${esc(x.title)}</div><div class="mut">${fd(n.date)}${x.repeat_yearly?' · ทุกปี':''}${x.note?' · '+esc(x.note):''}</div></div><b style="color:#C98A2B;white-space:nowrap">${cdText(n.days)}</b></div>`).join(''):'<p class="mut">ยังไม่มีวันสำคัญ กด "+ เพิ่มวันสำคัญ"</p>'}</div>
+  <div class="btns"><button class="ghost" onclick="closeSheet()">ปิด</button><button class="pri" onclick="openImpForm()">+ เพิ่มวันสำคัญ</button></div>`)}
+function openImpForm(id,pre){const x=id?IM.find(v=>v.id===id):{title:'',date_on:pre||ymdOf(new Date()),repeat_yearly:false,remind_before:7,note:''};
+  openSheet(`<h2 style="margin-top:0">${id?'แก้ไขวันสำคัญ':'เพิ่มวันสำคัญ'}</h2><label>ชื่อวันสำคัญ (เช่น วันเกิด, ครบรอบ, วันสอบ)<input id="iw" value="${esc(x.title)}"></label>
+  <label>วันที่<input id="idt" type="date" value="${x.date_on}"></label>
+  <div class="row" style="border:0"><span>ทำซ้ำทุกปี (เช่น วันเกิด)</span><span class="sw"><input type="checkbox" id="iy" aria-label="ทำซ้ำทุกปี" ${x.repeat_yearly?'checked':''}><i></i></span></div>
+  <label>เริ่มเตือนที่หน้าแรกล่วงหน้า<select id="ib">${[1,3,7,14,30,60,90].map(v=>`<option value="${v}"${v===x.remind_before?' selected':''}>${v} วัน</option>`).join('')}</select></label>
+  <label>บันทึกเพิ่มเติม (ไม่บังคับ)<textarea id="inn">${esc(x.note||'')}</textarea></label><div class="err" id="ie"></div>
+  <div class="btns">${id?`<button class="del" onclick="delImp('${id}')">ลบ</button>`:''}<button class="ghost" onclick="openDates()">ยกเลิก</button><button class="pri" onclick="saveImp('${id||''}')">บันทึก</button></div>`)}
+async function saveImp(id){const t=$('iw').value.trim(),d=$('idt').value;if(!t||!d){$('ie').textContent='ใส่ชื่อและวันที่';return}
+  const row={title:t,date_on:d,repeat_yearly:$('iy').checked,remind_before:Number($('ib').value),note:$('inn').value.trim()||null};
+  if(id)await q(sb.from('important_dates').update(row).eq('id',id));else await q(sb.from('important_dates').insert(row));await load();openDates()}
+async function delImp(id){if(!confirm('ลบวันสำคัญนี้?'))return;await q(sb.from('important_dates').update({deleted_at:new Date().toISOString()}).eq('id',id));await load();openDates()}
+function openMenu(){openSheet(`<h2 style="margin-top:0">เมนู</h2><button class="ghost" style="width:100%;margin-bottom:10px" onclick="location.href='index.html'">การเงิน (บัญชี รายรับ-รายจ่าย ลงทุน)</button><button class="pri" style="width:100%;margin-bottom:10px" onclick="closeSheet()">ปฏิทินและงาน (หน้านี้)</button><button class="ghost" style="width:100%;margin-bottom:10px" onclick="openDates()">★ วันสำคัญ · นับถอยหลัง</button><button class="ghost" style="width:100%;margin-bottom:10px" onclick="openLists()">จัดการลิสต์ (หมวดหมู่งาน)</button><button class="ghost" style="width:100%" onclick="closeSheet()">ปิด</button>`)}
 init();
 </script>
 </body>

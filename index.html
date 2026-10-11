@@ -35,6 +35,7 @@ label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mut)
 .note{background:var(--pink);border-radius:18px;padding:12px 14px;font-size:13px;color:var(--mut);margin:12px 0}.lk{color:var(--pri);font-size:13px;text-decoration:underline}
 .sw{position:relative;display:inline-block;width:46px;height:28px;flex:none}.sw input{position:absolute;inset:0;width:100%;height:100%;min-height:0;opacity:0;margin:0;padding:0;border:0;cursor:pointer;z-index:1}.sw i{position:absolute;inset:0;background:#cfc3ea;border-radius:14px;transition:.2s}.sw i:before{content:'';position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:.2s}.sw input:checked+i{background:var(--pri)}.sw input:checked+i:before{transform:translateX(18px)}.off{opacity:.55}
 .hf{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}.hf .chip{min-height:40px;font-size:14px;padding:0 14px}
+.bdg{display:inline-block;min-width:20px;padding:0 6px;border-radius:10px;background:var(--neg);color:#fff;font-size:12px;line-height:20px;margin-left:4px}
 .sec{display:flex;justify-content:space-between;align-items:center;margin:18px 0 8px}.sec button{min-height:38px;font-size:14px;background:var(--soft)}.err{color:var(--neg);font-size:14px;min-height:20px}
 </style>
 </head>
@@ -46,7 +47,7 @@ const SB_URL='https://etqgjkeyoxgfncphtiao.supabase.co';
 const SB_KEY='sb_publishable_adz6BHqdK99sKdBnJsNk-g_PRRhpYTj';
 const TL={income:'รายรับ',expense:'รายจ่าย',transfer:'โอน',card_purchase:'รูดบัตร',card_payment:'ชำระบัตรเครดิต',security_buy:'ซื้อหุ้น/กองทุน',security_sell:'ขายหุ้น/กองทุน',gold_buy:'ซื้อทองคำ',gold_sell:'ขายทองคำ',fx_buy:'แลกเงินตราต่างประเทศ (เก็บไว้)',fx_sell:'แลกเงินตราต่างประเทศกลับเป็นบาท'};
 const AT={deposit:'เงินฝาก',card:'บัตรเครดิต',securities:'หุ้น/กองทุน',other:'อื่นๆ'};
-let sb,A=[],T=[],L=[],SL=[],PR=[],IP=[],II=[];
+let sb,A=[],T=[],L=[],SL=[],PR=[],IP=[],II=[],TKS=[],IMP=[];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>(n<0?'-':'')+'฿'+Math.abs(Number(n)).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -79,6 +80,8 @@ async function load(){
   A=await q(sb.from('accounts').select('*').is('deleted_at',null).order('display_order'));
   T=await q(sb.from('transactions').select('*').is('deleted_at',null).order('occurred_at',{ascending:false}));
   L=await q(sb.from('security_lots').select('*'));SL=await q(sb.from('security_sales').select('*'));PR=await q(sb.from('security_prices').select('*'));IP=await q(sb.from('installment_plans').select('*').order('created_at'));II=await q(sb.from('installment_items').select('*'));
+  const tk=await sb.from('tasks').select('*').is('deleted_at',null);TKS=tk.error?[]:tk.data;
+  const im=await sb.from('important_dates').select('*').is('deleted_at',null);IMP=im.error?[]:im.data;
   home();
 }
 function cardRow(a){const b=bal(a),used=Math.max(0,-b),lim=Number(a.credit_limit||0),ps=IP.filter(p=>p.card_account_id===a.id);
@@ -90,10 +93,10 @@ function home(){
   const non=A.filter(a=>a.account_type!=='card'),cards=A.filter(a=>a.account_type==='card');
   const nEx=A.filter(a=>a.exclude_from_total).length,tot=non.filter(a=>!a.exclude_from_total).reduce((s,a)=>s+bal(a),0),debt=cards.filter(a=>!a.exclude_from_total).reduce((s,a)=>s+Math.min(0,bal(a)),0);
   const groups={};A.forEach(a=>{const k=a.institution||'อื่นๆ';(groups[k]=groups[k]||[]).push(a)});
-  let h=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><button class="ghost" aria-label="เมนู" onclick="openMenu()" style="font-size:20px;padding:0 14px">☰</button><div style="flex:1"><h1>AnnyLuk Finance</h1><div class="mut">ภาพรวมบัญชี · ข้อมูลจริงจาก Supabase</div></div><button class="ghost" onclick="logout()">ออก</button></div>
+  let h=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><button class="ghost" aria-label="เมนู" onclick="openMenu()" style="font-size:20px;padding:0 14px">☰${notifyEntries().length?`<span class="bdg">${notifyEntries().length}</span>`:''}</button><div style="flex:1"><h1>AnnyLuk Finance</h1><div class="mut">ภาพรวมบัญชี · ข้อมูลจริงจาก Supabase</div></div><button class="ghost" onclick="logout()">ออก</button></div>
   <div class="note">ยอดที่แสดงคือผลรวมจากรายการที่บันทึกในระบบนี้เท่านั้น ยังไม่ผ่านการกระทบยอดกับ statement จริง ตอนนี้รองรับ รายรับ / รายจ่าย / โอน / รูดบัตร / หุ้น-กองทุน ทองคำ เงินตราต่างประเทศ และผ่อนชำระ</div>
   <div class="hero"><div style="opacity:.9;font-size:14px">ยอดรวมบัญชีที่ไม่ใช่บัตร${nEx?` (ไม่รวม ${nEx} บัญชี)`:''}</div><div class="n">${fmt(tot)}</div><div style="font-size:13px;opacity:.9">หนี้บัตรเครดิตรวม ${fmt(-debt)}</div><div style="font-size:13px;opacity:.9">มูลค่าสินทรัพย์ลงทุน (หุ้น ทอง เงินตรา) ตามราคาล่าสุด ${fmt(portfolioTotal())}</div></div>
-  ${staleBanner()}<div class="sec"><h2 style="margin:0">บัญชี</h2><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button onclick="openManage()">จัดการบัญชี</button><button onclick="openDay()">สรุปรายวัน</button><button onclick="openMonth()">สรุปรายเดือน</button></div></div><div class="mut" style="margin:-2px 0 4px">สวิตช์ท้ายแต่ละบัญชี: เปิด = นับรวมในยอดรวม · ปิด = ไม่รวม</div>`;
+  ${notifyHTML()}${countdownHTML()}${staleBanner()}<div class="sec"><h2 style="margin:0">บัญชี</h2><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button onclick="openManage()">จัดการบัญชี</button><button onclick="openDay()">สรุปรายวัน</button><button onclick="openMonth()">สรุปรายเดือน</button></div></div><div class="mut" style="margin:-2px 0 4px">สวิตช์ท้ายแต่ละบัญชี: เปิด = นับรวมในยอดรวม · ปิด = ไม่รวม</div>`;
   if(!A.length)h+='<div class="card"><p class="mut">ยังไม่มีบัญชี กด "จัดการบัญชี" เพื่อเพิ่ม</p></div>';
   for(const g in groups){h+=`<div class="mut" style="margin:12px 0 4px">${esc(g)}</div><div class="card">`+groups[g].map(a=>a.account_type==='card'?cardRow(a):`<div class="row${a.exclude_from_total?' off':''}"><span>${esc(a.nickname)}${a.exclude_from_total?' <span class="mut">· ไม่รวมในยอดรวม</span>':''}</span><span style="display:flex;align-items:center;gap:10px"><span class="b">${fmt(bal(a))}</span>${sw(a)}</span></div>`).join('')+'</div>'}
   h+=portfolioHTML('security')+portfolioHTML('gold')+portfolioHTML('fx');
@@ -373,7 +376,26 @@ function openDay(ymd){
   <div class="mut" style="margin-bottom:4px">โอนระหว่างบัญชีและการซื้อ-ขายสินทรัพย์ลงทุนไม่นับเป็นรายรับ/รายจ่าย</div>
   ${day.length?`<h2>แยกรายบัญชี</h2><div class="card">`+Object.keys(mp).map(id=>`<div class="row"><span>${esc(nm(id))}</span><span class="mut">เข้า ${fmt(mp[id].i)} · ออก ${fmt(mp[id].o)}</span></div>`).join('')+`</div><h2>รายการของวัน</h2><div class="card">`+day.map(t=>`<div class="row"><div><div>${TL[t.txn_type]}${t.category?' · '+esc(t.category):''}</div><div class="mut">${new Date(t.occurred_at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}</div></div><span class="b" style="color:${isIn(t)?'var(--pos)':t.txn_type==='transfer'?'var(--ink)':'var(--neg)'}">${t.txn_type==='transfer'?'':isIn(t)?'+':'-'}${fmt(t.amount)}</span></div>`).join('')+'</div>':'<p class="mut">ไม่มีรายการในวันนี้</p>'}
   <button class="ghost" style="width:100%;margin-top:14px" onclick="closeSheet()">ปิด</button>`)}
-function openMenu(){openSheet(`<h2 style="margin-top:0">เมนู</h2><button class="pri" style="width:100%;margin-bottom:10px" onclick="closeSheet()">การเงิน (หน้านี้)</button><button class="ghost" style="width:100%;margin-bottom:10px" onclick="location.href='calendar.html'">ปฏิทินและงาน</button><button class="ghost" style="width:100%" onclick="closeSheet()">ปิด</button>`)}
+const pdY=x=>{const[y,m,d]=x.split('-').map(Number);return new Date(y,m-1,d)};
+const diffDays=(a,b)=>Math.round((pdY(a)-pdY(b))/864e5);
+function impNext(x){const today=ymdOf(new Date());if(!x.repeat_yearly)return{date:x.date_on,days:diffDays(x.date_on,today)};
+  const[,m,d]=x.date_on.split('-').map(Number),mk=yy=>ymdOf(new Date(yy,m-1,Math.min(d,new Date(yy,m,0).getDate())));let o=mk(new Date().getFullYear());if(o<today)o=mk(new Date().getFullYear()+1);return{date:o,days:diffDays(o,today)}}
+function notifyEntries(){const today=ymdOf(new Date()),E=[],tm=t=>t.due_time?' · '+t.due_time.slice(0,5):'';
+  for(const t of TKS){if(t.done||!t.due_date)continue;const d=diffDays(t.due_date,today);
+    if(d<0)E.push({d,tone:'over',title:t.title,sub:`เลยกำหนดมา ${-d} วัน${tm(t)}`});
+    else if(d<=(t.remind_before||0))E.push({d,tone:d===0?'today':'soon',title:t.title,sub:(d===0?'ครบกำหนดวันนี้':`อีก ${d} วัน (${fdt2(t.due_date)})`)+tm(t)})}
+  for(const i of II){if(paidItem(i))continue;const p=IP.find(x=>x.id===i.plan_id);if(!p)continue;const d=diffDays(i.due_date,today),ttl=`ผ่อน ${p.title} งวด ${i.seq}/${p.months}`,sb2=` · ${fmt(i.amount)} · ${nm(p.card_account_id)}`;
+    if(d<0)E.push({d,tone:'over',title:ttl,sub:`เลยกำหนด ${-d} วัน`+sb2});else if(d<=3)E.push({d,tone:d===0?'today':'soon',title:ttl,sub:(d===0?'ครบกำหนดวันนี้':`อีก ${d} วัน`)+sb2})}
+  for(const x of IMP){const n=impNext(x);if(n.days>=0&&n.days<=(x.remind_before||7))E.push({d:n.days,tone:n.days===0?'today':'soon',title:'★ '+x.title,sub:n.days===0?'วันนี้!':`อีก ${n.days} วัน (${fdt2(n.date)})`})}
+  return E.sort((a,b)=>a.d-b.d)}
+function notifyHTML(){const E=notifyEntries();if(!E.length)return '';const col={over:'var(--neg)',today:'var(--pri)',soon:'var(--ink)'};
+  return `<div class="card" style="margin:12px 0;padding:10px 16px;border:1.5px solid var(--soft)"><div class="row" style="border:0"><b>แจ้งเตือน (${E.length})</b><a href="calendar.html" class="lk">เปิดปฏิทิน</a></div>`+
+  E.slice(0,8).map(e=>`<div class="row" onclick="location.href='calendar.html'" style="cursor:pointer"><div><div style="color:${col[e.tone]};font-weight:600">${esc(e.title)}</div><div class="mut">${esc(e.sub)}</div></div></div>`).join('')+(E.length>8?`<div class="mut" style="padding:8px 0">และอีก ${E.length-8} รายการ ดูในปฏิทิน</div>`:'')+'</div>'}
+function countdownHTML(){const up=IMP.map(x=>({x,n:impNext(x)})).filter(o=>o.n.days>=0).sort((a,b)=>a.n.days-b.n.days).slice(0,3);
+  if(!up.length)return `<div class="mut" style="margin:8px 0"><a href="calendar.html?dates=1" class="lk">+ เพิ่มวันสำคัญ (นับถอยหลัง)</a></div>`;
+  return `<div class="card" style="margin:12px 0;padding:10px 16px"><div class="row" style="border:0"><b>★ วันสำคัญ · นับถอยหลัง</b><a href="calendar.html?dates=1" class="lk">จัดการ</a></div>`+
+  up.map(({x,n})=>`<div class="row"><div><div class="b">${esc(x.title)}</div><div class="mut">${fdt2(n.date)}${x.repeat_yearly?' · ทุกปี':''}</div></div><b style="color:#C98A2B;white-space:nowrap">${n.days===0?'วันนี้':'อีก '+n.days+' วัน'}</b></div>`).join('')+'</div>'}
+function openMenu(){openSheet(`<h2 style="margin-top:0">เมนู</h2><button class="pri" style="width:100%;margin-bottom:10px" onclick="closeSheet()">การเงิน (หน้านี้)</button><button class="ghost" style="width:100%;margin-bottom:10px" onclick="location.href='calendar.html'">ปฏิทินและงาน</button><button class="ghost" style="width:100%;margin-bottom:10px" onclick="location.href='calendar.html?dates=1'">★ วันสำคัญ · นับถอยหลัง</button><button class="ghost" style="width:100%" onclick="closeSheet()">ปิด</button>`)}
 init();
 </script>
 </body>
