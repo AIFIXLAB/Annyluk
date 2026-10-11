@@ -81,8 +81,8 @@ async function load(){
   home();
 }
 function cardRow(a){const b=bal(a),used=Math.max(0,-b),lim=Number(a.credit_limit||0),ps=IP.filter(p=>p.card_account_id===a.id);
-  const pl=ps.map(p=>{const st=planStat(p);return `<div class="mut">ผ่อน: ${esc(p.title)} · ${fmt(st.per)}/งวด · จ่ายแล้ว ${st.paid}/${p.months} · เหลือ ${fmt(st.remain)}</div>`}).join('');
-  return `<div class="row${a.exclude_from_total?' off':''}" style="align-items:flex-start"><div><div>${esc(a.nickname)}${a.exclude_from_total?' <span class="mut">· ไม่รวมในยอดรวม</span>':''}</div>${lim?`<div class="mut">ใช้ไป ${fmt(used)} จากวงเงิน ${fmt(lim)} · เหลือ ${fmt(lim-used)}</div>`:'<div class="mut">ยังไม่ได้ตั้งวงเงิน</div>'}${pl}<a href="#" class="lk" onclick="setLimit('${a.id}');return false">แก้ไขวงเงิน</a> · <a href="#" class="lk" onclick="openPlans('${a.id}');return false">ผ่อนชำระ${ps.length?' ('+ps.length+')':''}</a></div><span style="display:flex;align-items:center;gap:10px"><span class="b">${fmt(b)}</span>${sw(a)}</span></div>`}
+  const pl=ps.length?`<div class="mut">ผ่อนอยู่ ${ps.length} รายการ · ต่องวดรวม ${fmt(ps.reduce((t,p)=>{const st=planStat(p);return t+(st.remain>0?st.per:0)},0))} · เหลือรวม ${fmt(ps.reduce((t,p)=>t+planStat(p).remain,0))}</div>`:'';
+  return `<div class="row${a.exclude_from_total?' off':''}" style="align-items:flex-start"><div><div>${esc(a.nickname)}${a.exclude_from_total?' <span class="mut">· ไม่รวมในยอดรวม</span>':''}</div>${lim?`<div class="mut">ใช้ไป ${fmt(used)} จากวงเงิน ${fmt(lim)} · เหลือ ${fmt(lim-used)}</div>`:'<div class="mut">ยังไม่ได้ตั้งวงเงิน</div>'}${pl}<a href="#" class="lk" onclick="setLimit('${a.id}');return false">แก้ไขวงเงิน</a> · <a href="#" class="lk" onclick="openPlans('${a.id}');return false">แสดงรายการผ่อนชำระ${ps.length?' ('+ps.length+')':''}</a></div><span style="display:flex;align-items:center;gap:10px"><span class="b">${fmt(b)}</span>${sw(a)}</span></div>`}
 async function setLimit(id){const a=A.find(x=>x.id===id),v=prompt('วงเงินของ '+a.nickname+' (บาท)',a.credit_limit||'');if(v===null)return;
   const n=Number(v);if(!(n>=0)){alert('ใส่ตัวเลขวงเงิน');return}await q(sb.from('accounts').update({credit_limit:n}).eq('id',id));load()}
 function home(){
@@ -110,12 +110,17 @@ function openAdd(type){
   if(type==='income')f=`<label>บัญชีที่รับเข้า<select id="to">${opts(A)}</select></label>`;
   if(type==='expense')f=`<label>บัญชีที่จ่าย<select id="from">${opts(non)}</select></label>`;
   if(type==='transfer')f=`<label>จากบัญชี<select id="from">${opts(A)}</select></label><label>ไปบัญชี (จ่ายบัตรคืน เลือกบัตรตรงนี้)<select id="to">${opts(A)}</select></label>`;
-  if(type==='card_purchase')f=`<label>บัตรที่รูด<select id="from">${opts(cards)}</select></label>`;
+  if(type==='card_purchase')f=`<label>บัตรที่รูด<select id="from">${opts(cards)}</select></label>
+  <div class="row" style="border:0;padding:4px 0 10px"><span>ผ่อนชำระ</span><span class="sw"><input type="checkbox" id="inst" aria-label="ผ่อนชำระ" onchange="toggleInst()"><i></i></span></div>
+  <div id="instbox" style="display:none"><div class="mut" style="margin-bottom:8px">ช่อง "จำนวนเงิน" ด้านล่าง = ราคา/ยอดเต็มของสินค้า ยอดบัตรจะเพิ่มทีละงวดเมื่อกด "จ่ายแล้ว" ในรายการผ่อนชำระ</div>
+  <label>ชื่อสินค้า<input id="ipn"></label><label>จำนวนงวด (เดือน)<input id="ipm" type="number" inputmode="numeric" oninput="instCalc()"></label>
+  <label>ยอดผ่อนต่องวด (บาท คำนวณให้ แก้ได้ถ้ามีดอกเบี้ย)<input id="ipe" type="number" step="0.01" inputmode="decimal" oninput="this.dataset.m=1"></label>
+  <label>วันครบกำหนดงวดแรก<input id="ipd" type="date" value="${nextMonth()}"></label></div>`;
   if(type==='card_payment')f=`<label>บัญชีต้นทาง (จ่ายจาก)<select id="from">${opts(non)}</select></label><label>บัตรเครดิตที่ชำระ<select id="to">${opts(cards)}</select></label>`;
   const tf=typeForm(type);if(tf)f=tf;
   window._type=type;const sec=/^(security|gold|fx)_/.test(type);
   openSheet(`<h2 style="margin-top:0">เพิ่มรายการ</h2>${chips}${f}
-  <label>${type.endsWith('_buy')?'ยอดที่จ่ายจริง (บาท)':isSellT(type)?'ยอดที่ได้รับ (บาท คำนวณให้)':'จำนวนเงิน (บาท)'}<input id="amt" type="number" inputmode="decimal" step="0.01" min="0"${isSellT(type)?' readonly':''}></label>
+  <label>${type.endsWith('_buy')?'ยอดที่จ่ายจริง (บาท)':isSellT(type)?'ยอดที่ได้รับ (บาท คำนวณให้)':'จำนวนเงิน (บาท)'}<input id="amt" type="number" inputmode="decimal" step="0.01" min="0" oninput="instCalc()"${isSellT(type)?' readonly':''}></label>
   ${sec?'':'<label>หมวด / รายละเอียด<input id="cat"></label>'}<label>วันที่-เวลา<input id="dt" type="datetime-local" value="${nowLocal()}"></label>
   <label>เจ้าของ (ไม่บังคับ เช่น ชื่อคนในครอบครัว เว้นว่างได้ถ้าเป็นของกลาง)<input id="own"></label><label>หมายเหตุ (ไม่บังคับ)<input id="note"></label><div class="err" id="fe"></div>
   <button class="pri" style="width:100%" onclick="preview('${type}')">ตรวจสอบก่อนบันทึก</button>`);
@@ -198,7 +203,7 @@ function recalc(){const g=id=>$(id)?$(id).value:'',n=id=>Number(g(id)),ty=window
   if(isSellT(ty)){const l=L.find(x=>x.id===g('lotsel'));if(!l)return;const k=lotKind(l);let v;
     if(k==='gold')v=Number(l.units)/GRAM*n('px');else if(k==='fx')v=Number(l.units)*n('px');else{const usd=l.currency==='USD';fl.style.display=usd?'flex':'none';v=Number(l.units)*n('px')*(usd?n('fx'):1)}
     setAmt(v)}}
-function preview(type){
+function preview(type){window._plan=null;if(type==='card_purchase'&&$('inst')&&$('inst').checked)return previewPlan();
   const g=id=>$(id)?$(id).value:'',amt=Number(g('amt')),from=g('from')||null,to=g('to')||null,e=$('fe'),sell=isSellT(type),buy=type.endsWith('_buy'),kind=kindOf(type);
   if(!(amt>0)){e.textContent='ใส่จำนวนเงินมากกว่า 0 (ถ้าเป็นสินทรัพย์ลงทุน ใส่จำนวนและราคาให้ครบ)';return}
   if(type!=='income'&&!sell&&!from){e.textContent='เลือกบัญชีที่จ่าย';return}
@@ -226,7 +231,8 @@ function preview(type){
   ${!ex&&_p.category?`<div class="row"><span>รายละเอียด</span><span>${esc(_p.category)}</span></div>`:''}${_p.owner?`<div class="row"><span>เจ้าของ</span><span>${esc(_p.owner)}</span></div>`:''}${ex}${from?line(from,-amt):''}${to?line(to,amt):''}</div>
   <div class="btns" style="margin-top:14px"><button class="ghost" onclick="openAdd('${type}')">กลับไปแก้</button><button class="pri" onclick="confirmSave()">ยืนยันบันทึก</button></div>`);
 }
-async function confirmSave(){const{lot,sale}=window._x||{};
+async function confirmSave(){if(window._plan){const pl=window._plan;window._plan=null;await createPlan(pl);return}
+  const{lot,sale}=window._x||{};
   const t=await q(sb.from('transactions').insert(window._p).select().single());
   try{if(lot)await q(sb.from('security_lots').insert({...lot,buy_txn_id:t.id}));if(sale)await q(sb.from('security_sales').insert({...sale,sell_txn_id:t.id}))}
   catch(x){await sb.from('transactions').update({deleted_at:new Date().toISOString()}).eq('id',t.id);load();return}
@@ -265,30 +271,29 @@ function openMonth(ym){ym=ym||nowLocal().slice(0,7);const{R,inc,exp}=monthData(y
 const paidItem=i=>i.paid_txn_id&&T.some(t=>t.id===i.paid_txn_id);
 function planStat(p){const it=II.filter(i=>i.plan_id===p.id).sort((a,b)=>a.seq-b.seq);return{it,paid:it.filter(paidItem).length,remain:it.filter(i=>!paidItem(i)).reduce((s,i)=>s+Number(i.amount),0),per:it[0]?Number(it[0].amount):0}}
 function openPlans(cardId){const ps=IP.filter(p=>p.card_account_id===cardId);
-  let h=`<h2 style="margin-top:0">ผ่อนชำระ · ${esc(nm(cardId))}</h2><p class="mut">กด "จ่ายแล้ว" เมื่อบิลของงวดนั้นขึ้นจริง ระบบจะบันทึกเป็นรายการรูดบัตรให้</p>`;
+  let h=`<h2 style="margin-top:0">รายการผ่อนชำระ · ${esc(nm(cardId))}</h2><p class="mut">กด "จ่ายแล้ว" เมื่อบิลของงวดนั้นขึ้นจริง ระบบจะบันทึกเป็นรายการรูดบัตรให้</p>`;
   if(!ps.length)h+='<p class="mut">ยังไม่มีแผนผ่อนในบัตรนี้</p>';
   ps.forEach(p=>{const st=planStat(p);h+=`<div class="card" style="margin-bottom:12px;padding:12px 16px"><div class="row" style="border:0"><span class="b">${esc(p.title)}</span><span class="mut">จ่ายแล้ว ${st.paid}/${p.months} งวด</span></div>
   <div class="mut">ยอดเต็ม ${fmt(p.total_amount)} · งวดละ ${fmt(st.per)} · เหลือจ่าย ${fmt(st.remain)}</div>`+
   st.it.map(i=>`<div class="row"><span>งวด ${i.seq} · ${fdt2(i.due_date)}</span><span>${fmt(i.amount)} ${paidItem(i)?'<b style="color:var(--pos)">จ่ายแล้ว</b>':`<button style="min-height:36px;font-size:13px" onclick="payInst('${i.id}')">จ่ายแล้ว</button>`}</span></div>`).join('')+
   `<button class="del" style="width:100%;margin-top:8px" onclick="delPlan('${p.id}')">ลบแผนนี้</button></div>`});
-  openSheet(h+`<div class="btns"><button class="ghost" onclick="closeSheet()">ปิด</button><button class="pri" onclick="openPlanForm('${cardId}')">+ เพิ่มแผนผ่อน</button></div>`)}
-function openPlanForm(cardId){const d=new Date();d.setMonth(d.getMonth()+1);
-  openSheet(`<h2 style="margin-top:0">เพิ่มแผนผ่อนชำระ</h2><label>ชื่อสินค้า/รายการ<input id="pt"></label>
-  <label>บัตรเครดิต<select id="pc">${opts(A.filter(a=>a.account_type==='card'),cardId)}</select></label>
-  <label>ยอดเต็ม (บาท)<input id="pa" type="number" step="0.01" inputmode="decimal" oninput="planHint()"></label>
-  <label>จำนวนงวด (เดือน)<input id="pm" type="number" inputmode="numeric" oninput="planHint()"></label>
-  <label>วันครบกำหนดงวดแรก<input id="pd" type="date" value="${d.toISOString().slice(0,10)}"></label>
-  <div class="b" id="ph" style="margin-bottom:8px"></div><div class="err" id="pe"></div>
-  <div class="btns"><button class="ghost" onclick="openPlans('${cardId}')">ยกเลิก</button><button class="pri" onclick="savePlan()">สร้างแผนผ่อน</button></div>`)}
-function planHint(){const t=Number($('pa').value),m=Math.round(Number($('pm').value));$('ph').textContent=t>0&&m>=1?`งวดละประมาณ ${fmt(Math.floor(t/m*100)/100)} × ${m} งวด`:''}
+  openSheet(h+`<div class="btns"><button class="ghost" onclick="closeSheet()">ปิด</button><button class="pri" onclick="openAdd('card_purchase')">+ เพิ่มรายการผ่อน</button></div>`)}
 function addMonths(d,i){const[y,m,day]=d.split('-').map(Number),last=new Date(y,m-1+i+1,0).getDate(),x=new Date(y,m-1+i,Math.min(day,last));return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0')}
-async function savePlan(){const t=$('pt').value.trim(),c=$('pc').value,tot=Number($('pa').value),m=Math.round(Number($('pm').value)),d=$('pd').value;
-  if(!t||!c||!(tot>0)||!(m>=1)||!d){$('pe').textContent='กรอกให้ครบทุกช่อง';return}
+function nextMonth(){const d=new Date();d.setMonth(d.getMonth()+1);return d.toISOString().slice(0,10)}
+function toggleInst(){$('instbox').style.display=$('inst').checked?'block':'none';const e=$('ipe');if(e)delete e.dataset.m;instCalc()}
+function instCalc(){if(!$('ipm'))return;const m=Math.round(Number($('ipm').value)),a=Number($('amt').value),e=$('ipe');if(!e.dataset.m&&a>0&&m>=1)e.value=(Math.floor(a/m*100)/100).toFixed(2)}
+function previewPlan(){const g=id=>$(id)?$(id).value:'',card=g('from'),title=g('ipn').trim(),tot=Number(g('amt')),m=Math.round(Number(g('ipm'))),first=g('ipd'),e=$('fe');
+  if(!card||!title||!(tot>0)||!(m>=1)||!first){e.textContent='กรอกให้ครบ: บัตร ชื่อสินค้า จำนวนเงิน จำนวนงวด วันครบกำหนดงวดแรก';return}
   if(m>60&&!confirm('จำนวนงวดเกิน 60 เดือน แน่ใจหรือไม่?'))return;
-  const base=Math.floor(tot/m*100)/100,items=[];let acc=0;
-  for(let i=0;i<m;i++){const amt=i===m-1?Math.round((tot-acc)*100)/100:base;acc+=amt;items.push({seq:i+1,due_date:addMonths(d,i),amount:amt})}
-  const p=await q(sb.from('installment_plans').insert({card_account_id:c,title:t,total_amount:tot,months:m,first_due:d}).select().single());
-  await q(sb.from('installment_items').insert(items.map(x=>({...x,plan_id:p.id}))));await load();openPlans(c)}
+  const per=Number(g('ipe')),auto=Math.floor(tot/m*100)/100,items=[];let total=tot;
+  if(per>0&&Math.abs(per-auto)>0.01){total=Math.round(per*m*100)/100;for(let i=0;i<m;i++)items.push({seq:i+1,due_date:addMonths(first,i),amount:per})}
+  else{let acc=0;for(let i=0;i<m;i++){const amt=i===m-1?Math.round((tot-acc)*100)/100:auto;acc+=amt;items.push({seq:i+1,due_date:addMonths(first,i),amount:amt})}}
+  window._plan={card,title,total,months:m,first,items};
+  openSheet(`<h2 style="margin-top:0">ตรวจสอบแผนผ่อนชำระ</h2><div class="card"><div class="row"><span>บัตร</span><b>${esc(nm(card))}</b></div><div class="row"><span>สินค้า</span><span>${esc(title)}</span></div><div class="row"><span>ยอดรวมที่ผ่อน</span><b>${fmt(total)}</b></div><div class="row"><span>ผ่อน</span><span>${m} งวด × ${fmt(items[0].amount)}</span></div><div class="row"><span>งวดแรกครบกำหนด</span><span>${fdt2(first)}</span></div></div>
+  <p class="mut">ยอดบัตรยังไม่เพิ่มตอนนี้ จะเพิ่มทีละงวดเมื่อกด "จ่ายแล้ว" ใน "แสดงรายการผ่อนชำระ" ของบัตรนี้</p>
+  <div class="btns"><button class="ghost" onclick="openAdd('card_purchase')">กลับไปแก้</button><button class="pri" onclick="confirmSave()">ยืนยันบันทึก</button></div>`)}
+async function createPlan(p){const plan=await q(sb.from('installment_plans').insert({card_account_id:p.card,title:p.title,total_amount:p.total,months:p.months,first_due:p.first}).select().single());
+  await q(sb.from('installment_items').insert(p.items.map(x=>({...x,plan_id:plan.id}))));closeSheet();await load();openPlans(p.card)}
 async function payInst(id){const i=II.find(x=>x.id===id),p=IP.find(x=>x.id===i.plan_id);
   const t=await q(sb.from('transactions').insert({txn_type:'card_purchase',from_account_id:p.card_account_id,amount:i.amount,category:`${p.title} (งวด ${i.seq}/${p.months})`,occurred_at:new Date().toISOString()}).select().single());
   await q(sb.from('installment_items').update({paid_txn_id:t.id}).eq('id',id));await load();openPlans(p.card_account_id)}
