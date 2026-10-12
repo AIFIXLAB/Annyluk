@@ -36,6 +36,8 @@ label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mut)
 .sw{position:relative;display:inline-block;width:46px;height:28px;flex:none}.sw input{position:absolute;inset:0;width:100%;height:100%;min-height:0;opacity:0;margin:0;padding:0;border:0;cursor:pointer;z-index:1}.sw i{position:absolute;inset:0;background:#cfc3ea;border-radius:14px;transition:.2s}.sw i:before{content:'';position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:.2s}.sw input:checked+i{background:var(--pri)}.sw input:checked+i:before{transform:translateX(18px)}.off{opacity:.55}
 .hf{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}.hf .chip{min-height:40px;font-size:14px;padding:0 14px}
 .bdg{display:inline-block;min-width:20px;padding:0 6px;border-radius:10px;background:var(--neg);color:#fff;font-size:12px;line-height:20px;margin-left:4px}
+.scr{overflow-x:auto;-webkit-overflow-scrolling:touch}.tbl{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}.tbl th{background:var(--soft);padding:8px 8px;text-align:right;font-weight:600;white-space:nowrap}.tbl td{padding:9px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}.tbl th:first-child,.tbl td:first-child{text-align:left;position:sticky;left:0;background:#fff}.tbl th:first-child{background:var(--soft)}.tbl tr.tot td{font-weight:600;border-top:2px solid var(--soft)}
+.mbox{background:#fff;border-radius:16px;padding:12px 10px;text-align:center}.mbox .t{font-size:12px;color:var(--mut)}.mbox .v{font-size:17px;font-weight:600;margin-top:4px}.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
 .sec{display:flex;justify-content:space-between;align-items:center;margin:18px 0 8px}.sec button{min-height:38px;font-size:14px;background:var(--soft)}.err{color:var(--neg);font-size:14px;min-height:20px}
 </style>
 </head>
@@ -47,7 +49,7 @@ const SB_URL='https://etqgjkeyoxgfncphtiao.supabase.co';
 const SB_KEY='sb_publishable_adz6BHqdK99sKdBnJsNk-g_PRRhpYTj';
 const TL={income:'รายรับ',expense:'รายจ่าย',transfer:'โอน',card_purchase:'รูดบัตร',card_payment:'ชำระบัตรเครดิต',security_buy:'ซื้อหุ้น/กองทุน',security_sell:'ขายหุ้น/กองทุน',gold_buy:'ซื้อทองคำ',gold_sell:'ขายทองคำ',fx_buy:'แลกเงินตราต่างประเทศ (เก็บไว้)',fx_sell:'แลกเงินตราต่างประเทศกลับเป็นบาท'};
 const AT={deposit:'เงินฝาก',card:'บัตรเครดิต',securities:'หุ้น/กองทุน',other:'อื่นๆ'};
-let sb,A=[],T=[],L=[],SL=[],PR=[],IP=[],II=[],TKS=[],IMP=[];
+let sb,A=[],T=[],L=[],SL=[],PR=[],IP=[],II=[],TKS=[],IMP=[],PS=[];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>(n<0?'-':'')+'฿'+Math.abs(Number(n)).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -82,6 +84,7 @@ async function load(){
   L=await q(sb.from('security_lots').select('*'));SL=await q(sb.from('security_sales').select('*'));PR=await q(sb.from('security_prices').select('*'));IP=await q(sb.from('installment_plans').select('*').order('created_at'));II=await q(sb.from('installment_items').select('*'));
   const tk=await sb.from('tasks').select('*').is('deleted_at',null);TKS=tk.error?[]:tk.data;
   const im=await sb.from('important_dates').select('*').is('deleted_at',null);IMP=im.error?[]:im.data;
+  await loadSnaps();
   home();
 }
 function cardRow(a){const b=bal(a),used=Math.max(0,-b),lim=Number(a.credit_limit||0),ps=IP.filter(p=>p.card_account_id===a.id);
@@ -158,7 +161,7 @@ function staleBanner(){const n=['security','gold','fx'].reduce((c,k)=>c+holdings
   return n?`<div class="note" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span>ราคาของ ${n} รายการยังไม่ได้อัปเดตวันนี้ มูลค่าอาจไม่ตรงปัจจุบัน</span><button onclick="openPrices()" style="min-height:38px;font-size:14px">อัปเดตราคา</button></div>`:''}
 function priceText(x){return x.kind==='gold'?`ราคารับซื้อ ${fmt(x.price)} / บาททอง`:x.kind==='fx'?`อัตรา ${x.price} บาท/${x.sym.replace('FX:','')}`:`ราคา ${x.price} ${x.cur}`}
 function portfolioHTML(kind){
-  const hs=holdings(kind);let h=`<div class="sec"><h2 style="margin:0">${KT[kind]}</h2><button onclick="openPrices()">อัปเดตราคา</button></div>`;
+  const hs=holdings(kind);let h=`<div class="sec"><h2 style="margin:0">${KT[kind]}</h2><div style="display:flex;gap:8px"><button onclick="openPortfolio()">รวมพอร์ต</button><button onclick="openPrices()">อัปเดตราคา</button></div></div>`;
   if(!hs.length)return h+`<div class="card"><p class="mut">ยังไม่มี${KT[kind]} กด "+ เพิ่มรายการ" แล้วเลือก ${kind==='gold'?'ซื้อทองคำ':kind==='fx'?'แลกเงินตราต่างประเทศ':'ซื้อหุ้น/กองทุน'}</p></div>`;
   h+='<div class="card">'+hs.map(x=>`<div style="padding:10px 0;border-bottom:1px solid var(--line)"><div class="row" style="border:0;padding:0"><span class="b">${esc(symLabel(x.sym,kind))}</span><span class="b">${x.value==null?'-':fmt(x.value)}</span></div>
   <div class="mut">${unitLabel(kind,x.units,x.sym)} · ต้นทุน ${fmt(x.cost)}</div>
@@ -175,7 +178,7 @@ function openPrices(){const hg=holdings('gold'),hf=holdings('fx'),hs=holdings('s
   openSheet(h+`<div class="btns" style="margin-top:12px"><button class="ghost" onclick="closeSheet()">ยกเลิก</button><button class="pri" onclick="savePrices()">บันทึกราคา</button></div>`)}
 async function savePrices(){const rows=[];document.querySelectorAll('#sheet input[data-s]').forEach(el=>{const v=Number(el.value);if(el.value!==''&&v>0)rows.push({symbol:el.dataset.s,price:v,as_of:new Date().toISOString()})});
   if(!rows.length){alert('ใส่ราคาอย่างน้อย 1 รายการ');return}
-  await q(sb.from('security_prices').upsert(rows,{onConflict:'created_by,symbol'}));closeSheet();load()}
+  await q(sb.from('security_prices').upsert(rows,{onConflict:'created_by,symbol'}));closeSheet();await load();await takeSnapshot();await loadSnaps();home()}
 function secBuyForm(){const non=A.filter(a=>a.account_type!=='card'),sec=A.filter(a=>a.account_type==='securities');
   return `<label>บัญชีที่จ่ายเงิน<select id="from">${opts(non)}</select></label><label>บัญชีที่ถือ (เช่น กองทุน, Dime)<select id="hold">${opts(sec.length?sec:A)}</select></label>
   <label>ชื่อหลักทรัพย์ (เช่น AAPL หรือชื่อกองทุน)<input id="sym" list="syms"></label><datalist id="syms">${symList().map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
@@ -325,6 +328,8 @@ function exportXlsx(ym){
   SL.forEach(s=>{const l=L.find(x=>x.id===s.lot_id),t=T.find(x=>x.id===s.sell_txn_id),k=l?lotKind(l):'security';sl.push([t?d2(t.occurred_at)[0]:'',KT[k],l?symLabel(l.symbol,k):'',Number(s.units),Number(s.sell_price),Number(s.proceeds),Number(s.cost_thb),Number(s.profit)])});add(sl,'ขายสินทรัพย์');
   const ip=[['ผ่อนชำระบัตรเครดิต'],[],['บัตร','รายการ','งวดที่','ครบกำหนด','ยอดต่องวด (บาท)','สถานะ']];
   IP.forEach(p=>II.filter(i=>i.plan_id===p.id).sort((a,b)=>a.seq-b.seq).forEach(i=>ip.push([nm(p.card_account_id),p.title,i.seq+'/'+p.months,i.due_date,Number(i.amount),paidItem(i)?'จ่ายแล้ว':'ยังไม่จ่าย'])));add(ip,'ผ่อนชำระ');
+  const hb=batches().slice().reverse(),hr=[['ประวัติกำไรพอร์ตลงทุน (บันทึกทุกครั้งที่อัปเดตราคา)'],[],['วันที่','เงินลงทุน (บาท)','มูลค่าปัจจุบัน (บาท)','กำไร/ขาดทุน (บาท)','เปลี่ยนจากครั้งก่อน (บาท)']];
+  hb.forEach((b,i)=>hr.push([d2(b.t)[0]+' '+d2(b.t)[1],b.cost,b.val,b.pl,i?b.pl-hb[i-1].pl:'']));add(hr,'ประวัติกำไร');
   XLSX.writeFile(wb,'AnnyLuk_'+ym+'.xlsx');
 }
 function openManage(){
@@ -358,6 +363,34 @@ async function delAcct(id){if(!confirm('ลบบัญชีนี้? รา�
 const excl=id=>{const a=A.find(x=>x.id===id);return !!(a&&a.exclude_from_total)};
 const sw=a=>`<span class="sw" title="นับรวมในยอดรวม"><input type="checkbox" aria-label="นับรวมในยอดรวม ${esc(a.nickname)}" ${a.exclude_from_total?'':'checked'} onchange="toggleInc('${a.id}',this.checked)"><i></i></span>`;
 async function toggleInc(id,on){await q(sb.from('accounts').update({exclude_from_total:!on}).eq('id',id));const a=A.find(x=>x.id===id);if(a)a.exclude_from_total=!on;home()}
+async function loadSnaps(){const r=await sb.from('portfolio_snapshots').select('*').order('taken_at',{ascending:false}).limit(600);PS=r.error?[]:r.data}
+async function takeSnapshot(){const at=new Date().toISOString(),rows=[],r2=x=>x==null?null:Math.round(x*100)/100;
+  for(const k of['security','gold','fx'])for(const h of holdings(k))rows.push({taken_at:at,kind:k,symbol:h.sym,units:h.units,cost_thb:r2(h.cost),price:h.price,value_thb:r2(h.value),pl_thb:r2(h.pl)});
+  if(!rows.length)return;const r=await sb.from('portfolio_snapshots').insert(rows);if(r.error)console.warn(r.error.message)}
+function batches(){const m={};for(const r of PS)(m[r.taken_at]=m[r.taken_at]||[]).push(r);
+  return Object.keys(m).sort().reverse().map(t=>{const rows=m[t],cost=rows.reduce((a,x)=>a+Number(x.cost_thb),0),val=rows.reduce((a,x)=>a+(x.value_thb!=null?Number(x.value_thb):Number(x.cost_thb)),0);return{t,rows,cost,val,pl:val-cost}})}
+const plOf=(b,k,sy)=>{const r=b&&b.rows.find(x=>x.kind===k&&x.symbol===sy);return r&&r.value_thb!=null?Number(r.pl_thb):null};
+const ar=d=>d>0.004?'▲':d<-0.004?'▼':'—';
+const cl=d=>d>0.004?'var(--pos)':d<-0.004?'var(--neg)':'var(--mut)';
+function openPortfolio(){window.scrollTo(0,0);closeSheet();
+  const hs=[];['security','gold','fx'].forEach(k=>holdings(k).forEach(h=>hs.push(h)));
+  const cost=hs.reduce((a,h)=>a+h.cost,0),val=hs.reduce((a,h)=>a+(h.value!=null?h.value:h.cost),0),pl=val-cost,B=batches(),b0=B[0],b1=B[1];
+  const trend=b0&&b1?b0.pl-b1.pl:null;
+  const tr=hs.map(h=>{const p=h.value==null?null:h.pl,pc=h.cost&&p!=null?p/h.cost*100:null,a0=plOf(b0,h.kind,h.sym),a1=plOf(b1,h.kind,h.sym),dl=a0!=null&&a1!=null?a0-a1:null;
+    const st=p==null?'<span class="mut">ยังไม่ตั้งราคา</span>':Math.abs(p)<0.005?'<span class="mut">— เท่าทุน</span>':p>0?'<span style="color:var(--pos)">▲ กำไร</span>':'<span style="color:var(--neg)">▼ ขาดทุน</span>';
+    const dc=!b0?'<span class="mut">-</span>':!b1?'<span class="mut">รอครั้งหน้า</span>':dl==null?(a0!=null?'<span class="mut">ใหม่</span>':'<span class="mut">-</span>'):`<span style="color:${cl(dl)}">${ar(dl)} ${dl>0?'+':''}${fmt(dl)}</span>`;
+    return `<tr><td><div class="b">${esc(symLabel(h.sym,h.kind))}</div><div class="mut" style="font-size:11px">${KT[h.kind]}</div></td><td>${fmt(h.cost)}</td><td>${h.value==null?'-':fmt(h.value)}</td><td style="color:${p==null?'var(--mut)':cl(p)}">${p==null?'-':(p>0?'+':'')+fmt(p)}</td><td style="color:${pc==null?'var(--mut)':cl(pc)}">${pc==null?'-':pc.toFixed(2)+'%'}</td><td>${st}</td><td>${dc}</td></tr>`}).join('');
+  const hist=B.slice(0,12).map((b,i)=>{const d=B[i+1]?b.pl-B[i+1].pl:null;return `<tr><td>${fdt(b.t)}</td><td>${fmt(b.cost)}</td><td>${fmt(b.val)}</td><td style="color:${cl(b.pl)}">${b.pl>0?'+':''}${fmt(b.pl)}</td><td>${d==null?'<span class="mut">-</span>':`<span style="color:${cl(d)}">${ar(d)} ${d>0?'+':''}${fmt(d)}</span>`}</td></tr>`}).join('');
+  $('app').innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><button class="ghost" onclick="home()" style="padding:0 14px">← กลับ</button><h1 style="font-size:22px;flex:1">ภาพรวมพอร์ตลงทุน</h1></div>
+  <div class="g3"><div class="mbox"><div class="t">เงินลงทุนทั้งหมด</div><div class="v">${fmt(cost)}</div></div><div class="mbox"><div class="t">มูลค่าปัจจุบัน</div><div class="v">${fmt(val)}</div></div><div class="mbox"><div class="t">กำไร / ขาดทุน</div><div class="v" style="color:${cl(pl)}">${pl>0?'+':''}${fmt(pl)}</div></div></div>
+  <div class="g3"><div class="mbox"><div class="t">ผลตอบแทนรวม</div><div class="v" style="color:${cl(pl)}">${cost?(pl/cost*100).toFixed(2):'0.00'}%</div></div><div class="mbox"><div class="t">กำไรล่าสุดที่บันทึก</div><div class="v">${b0?fmt(b0.pl):'-'}</div></div><div class="mbox"><div class="t">แนวโน้มล่าสุด</div><div class="v" style="font-size:15px;color:${trend==null?'var(--mut)':cl(trend)}">${trend==null?'ยังไม่มีข้อมูลเทียบ':trend>0.004?'▲ กำไรเพิ่ม':trend<-0.004?'▼ กำไรลด':'— เท่าเดิม'}</div></div></div>
+  <h2>กำไร / ขาดทุน แยกตามกองทุน หุ้น ทอง และเงินตรา</h2>
+  ${hs.length?`<div class="card scr" style="padding:0"><table class="tbl"><thead><tr><th>รายการ</th><th>เงินลงทุน</th><th>มูลค่าปัจจุบัน</th><th>กำไร / ขาดทุน</th><th>ผลตอบแทน %</th><th>สถานะ</th><th>เทียบครั้งก่อน</th></tr></thead><tbody>${tr}<tr class="tot"><td>รวมทั้งหมด</td><td>${fmt(cost)}</td><td>${fmt(val)}</td><td style="color:${cl(pl)}">${pl>0?'+':''}${fmt(pl)}</td><td style="color:${cl(pl)}">${cost?(pl/cost*100).toFixed(2):'0.00'}%</td><td></td><td></td></tr></tbody></table></div>`:'<div class="card"><p class="mut">ยังไม่มีสินทรัพย์ลงทุน กด "+ เพิ่มรายการ" เพื่อเริ่มบันทึก</p></div>'}
+  <div class="note" style="margin-top:10px">${b0?`ข้อมูลล่าสุดที่บันทึก ${fdt(b0.t)}${b1?` · เทียบกับครั้งก่อน ${fdt(b1.t)}`:' · จะเทียบกับครั้งก่อนได้หลังอัปเดตราคาครั้งถัดไป'}`:'ยังไม่มีประวัติ กดปุ่ม "อัปเดตราคา" หรือ "บันทึกกำไรตอนนี้" เพื่อเริ่มเก็บประวัติเทียบครั้งก่อน'}</div>
+  <div class="btns" style="margin-bottom:6px"><button onclick="closeSheet();openPrices()">อัปเดตราคา</button><button class="pri" onclick="recordNow()">บันทึกกำไรตอนนี้</button></div>
+  ${hist?`<h2>ประวัติกำไร</h2><div class="card scr" style="padding:0"><table class="tbl" style="min-width:520px"><thead><tr><th>วันที่บันทึก</th><th>เงินลงทุน</th><th>มูลค่า</th><th>กำไร / ขาดทุน</th><th>เปลี่ยนจากครั้งก่อน</th></tr></thead><tbody>${hist}</tbody></table></div>`:''}
+  <h2>วิธีใช้</h2><div class="card"><p class="mut" style="margin:10px 0">1) ซื้อเพิ่ม → กด "+ เพิ่มรายการ" แล้วเลือกซื้อหุ้น/กองทุน ทอง หรือเงินตรา<br>2) กรอกราคา/NAV ปัจจุบัน → กด "อัปเดตราคา" ระบบจะบันทึกประวัติกำไรให้อัตโนมัติ<br>3) หน้านี้เทียบกำไร/ขาดทุนของแต่ละตัวกับครั้งที่บันทึกก่อนหน้า<br>▲ = กำไรเพิ่ม · ▼ = กำไรลด/ขาดทุน</p></div>`}
+async function recordNow(){await takeSnapshot();await loadSnaps();openPortfolio()}
 let HD=0;
 const dayStart=n=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-(n-1));return d};
 function setHD(d){HD=d;home()}
