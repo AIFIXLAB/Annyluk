@@ -57,7 +57,7 @@ const fdt=d=>new Date(d).toLocaleString('th-TH',{day:'numeric',month:'short',yea
 const nm=id=>{const a=A.find(x=>x.id===id);return a?a.nickname:'(บัญชีที่ลบแล้ว)'};
 async function q(p){const r=await p;if(r.error){alert('ผิดพลาด: '+r.error.message);throw r.error}return r.data}
 function openSheet(h){$('sheet').innerHTML=h;$('ov').style.display='flex'}
-function closeSheet(){$('ov').style.display='none'}
+function closeSheet(){$('ov').style.display='none';window._edit=null}
 function bal(a){let b=Number(a.opening_balance);for(const t of T){if(t.to_account_id===a.id)b+=Number(t.amount);if(t.from_account_id===a.id)b-=Number(t.amount)}return b}
 
 async function init(){
@@ -113,10 +113,10 @@ function home(){window._view='home';
 }
 function nowLocal(){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)}
 function opts(list,sel){return '<option value="">เลือกบัญชี</option>'+list.map(a=>`<option value="${a.id}"${a.id===sel?' selected':''}>${esc(a.nickname)}</option>`).join('')}
-function openAdd(type){
+function openAdd0(type){
   const cards=A.filter(a=>a.account_type==='card'),non=A.filter(a=>a.account_type!=='card');
   const ORDER=['income','expense','transfer','card_payment','card_purchase','security_buy','security_sell','gold_buy','gold_sell','fx_buy','fx_sell'];
-  const chips=`<label>ประเภทรายการ<select onchange="openAdd(this.value)">${ORDER.map(k=>`<option value="${k}"${k===type?' selected':''}>${TL[k]}</option>`).join('')}</select></label>`;
+  const chips=`<label>ประเภทรายการ<select onchange="openAdd(this.value)"${window._edit?' disabled':''}>${ORDER.map(k=>`<option value="${k}"${k===type?' selected':''}>${TL[k]}</option>`).join('')}</select></label>`;
   let f='';
   if(type==='income')f=`<label>บัญชีที่รับเข้า<select id="to">${opts(A)}</select></label>`;
   if(type==='expense')f=`<label>บัญชีที่จ่าย<select id="from">${opts(non)}</select></label>`;
@@ -130,11 +130,11 @@ function openAdd(type){
   if(type==='card_payment')f=`<label>บัญชีต้นทาง (จ่ายจาก)<select id="from">${opts(non)}</select></label><label>บัตรเครดิตที่ชำระ<select id="to">${opts(cards)}</select></label>`;
   const tf=typeForm(type);if(tf)f=tf;
   window._type=type;const sec=/^(security|gold|fx)_/.test(type);
-  openSheet(`<h2 style="margin-top:0">เพิ่มรายการ</h2>${chips}${f}
+  openSheet(`<h2 style="margin-top:0">${window._edit?'แก้ไขรายการ':'เพิ่มรายการ'}</h2>${chips}${f}
   <label>${type.endsWith('_buy')?'ยอดที่จ่ายจริง (บาท)':isSellT(type)?'ยอดที่ได้รับ (บาท คำนวณให้)':'จำนวนเงิน (บาท)'}<input id="amt" type="number" inputmode="decimal" step="0.01" min="0" oninput="instCalc()"${isSellT(type)?' readonly':''}></label>
   ${sec?'':'<label>หมวด / รายละเอียด<input id="cat"></label>'}<label>วันที่-เวลา<input id="dt" type="datetime-local" value="${nowLocal()}"></label>
   <label>เจ้าของ (ไม่บังคับ เช่น ชื่อคนในครอบครัว เว้นว่างได้ถ้าเป็นของกลาง)<input id="own"></label><label>หมายเหตุ (ไม่บังคับ)<input id="note"></label><div class="err" id="fe"></div>
-  <button class="pri" style="width:100%" onclick="preview('${type}')">ตรวจสอบก่อนบันทึก</button>`);
+  <button class="pri" style="width:100%" onclick="preview('${type}')">ตรวจสอบก่อนบันทึก</button>${window._edit?`<button class="ghost" style="width:100%;margin-top:8px" onclick="cancelEdit()">ยกเลิกการแก้ไข</button>`:''}`);
 }
 const GRAM=15.244;
 const kindOf=t=>t.startsWith('gold')?'gold':t.startsWith('fx')?'fx':'security';
@@ -199,7 +199,7 @@ function fxBuyForm(){const non=A.filter(a=>a.account_type!=='card');
   <label>จำนวนเงินตราต่างประเทศที่ได้<input id="units" type="number" step="any" inputmode="decimal" oninput="recalc()"></label>
   <label>อัตราแลกเปลี่ยน (บาทต่อ 1 หน่วย)<input id="px" type="number" step="any" inputmode="decimal" oninput="recalc()"></label>
   <label>ค่าธรรมเนียม (บาท ไม่บังคับ)<input id="fee" type="number" step="0.01" inputmode="decimal" oninput="recalc()"></label>`}
-function lotSellForm(kind){const ul=L.filter(l=>lotKind(l)===kind&&!SL.some(s=>s.lot_id===l.id));
+function lotSellForm(kind){const ul=L.filter(l=>lotKind(l)===kind&&(!SL.some(s=>s.lot_id===l.id)||(window._edit&&window._edit.sale&&window._edit.sale.lot_id===l.id)));
   const pl=kind==='gold'?'ราคาขาย ณ วันนี้ (บาทละ)':kind==='fx'?'อัตราแลกเปลี่ยนวันนี้ (บาทต่อ 1 หน่วย)':'ราคาขายต่อหน่วย (ตามสกุลเงินของล็อต)';
   return `<label>ล็อตที่จะขาย (ขายทั้งล็อต)<select id="lotsel" onchange="recalc()"><option value="">${ul.length?'เลือกล็อต':'ไม่มีล็อตที่ถืออยู่'}</option>${ul.map(l=>`<option value="${l.id}">${esc(symLabel(l.symbol,kind))} · ${fdt(lotDate(l))} · ${unitLabel(kind,l.units,l.symbol)} · ต้นทุน ${fmt(l.cost_thb)}</option>`).join('')}</select></label>
   <label>${pl}<input id="px" type="number" step="any" inputmode="decimal" oninput="recalc()"></label>
@@ -214,7 +214,7 @@ function recalc(){const g=id=>$(id)?$(id).value:'',n=id=>Number(g(id)),ty=window
   if(isSellT(ty)){const l=L.find(x=>x.id===g('lotsel'));if(!l)return;const k=lotKind(l);let v;
     if(k==='gold')v=Number(l.units)/GRAM*n('px');else if(k==='fx')v=Number(l.units)*n('px');else{const usd=l.currency==='USD';fl.style.display=usd?'flex':'none';v=Number(l.units)*n('px')*(usd?n('fx'):1)}
     setAmt(v)}}
-function preview(type){window._plan=null;if(type==='card_purchase'&&$('inst')&&$('inst').checked)return previewPlan();
+function preview(type){window._fv={};document.querySelectorAll('#sheet [id]').forEach(el=>{if(['INPUT','SELECT','TEXTAREA'].includes(el.tagName))window._fv[el.id]=el.type==='checkbox'?el.checked:el.value});window._plan=null;if(type==='card_purchase'&&$('inst')&&$('inst').checked)return previewPlan();
   const g=id=>$(id)?$(id).value:'',amt=Number(g('amt')),from=g('from')||null,to=g('to')||null,e=$('fe'),sell=isSellT(type),buy=type.endsWith('_buy'),kind=kindOf(type);
   if(!(amt>0)){e.textContent='ใส่จำนวนเงินมากกว่า 0 (ถ้าเป็นสินทรัพย์ลงทุน ใส่จำนวนและราคาให้ครบ)';return}
   if(type!=='income'&&!sell&&!from){e.textContent='เลือกบัญชีที่จ่าย';return}
@@ -236,13 +236,15 @@ function preview(type){window._plan=null;if(type==='card_purchase'&&$('inst')&&$
     sale={lot_id:l.id,units:l.units,sell_price:px,fx_rate:fx,proceeds:amt,cost_thb:l.cost_thb,profit};cat=symLabel(l.symbol,k);
     ex=row('ขายล็อต',esc(symLabel(l.symbol,k))+' · '+unitLabel(k,l.units,l.symbol))+row('ต้นทุนล็อต',fmt(l.cost_thb))+`<div class="row"><span class="b">กำไร/ขาดทุน</span><b style="color:${profit>=0?'var(--pos)':'var(--neg)'}">${profit>=0?'+':''}${fmt(profit)}</b></div>`}
   window._p={txn_type:type==='card_payment'?'transfer':type,amount:amt,from_account_id:from,to_account_id:to,category:cat,owner:g('own').trim()||null,note:g('note').trim()||null,occurred_at:new Date(g('dt')).toISOString()};window._x={lot,sale};
-  const line=(id,d)=>{const a=A.find(x=>x.id===id),b=bal(a);return `<div class="row"><span>${esc(a.nickname)}</span><span>${fmt(b)} → <b>${fmt(b+d)}</b></span></div>`};
+  const oe=id=>{const e=window._edit;if(!e)return 0;const o=e.t,x=Number(o.amount);return(o.to_account_id===id?x:0)-(o.from_account_id===id?x:0)};
+  const line=(id,d)=>{const a=A.find(x=>x.id===id),b=bal(a)-oe(id);return `<div class="row"><span>${esc(a.nickname)}</span><span>${fmt(b)} → <b>${fmt(b+d)}</b></span></div>`};
   openSheet(`<h2 style="margin-top:0">ตรวจสอบก่อนบันทึก</h2><div class="card"><div class="row"><span>ประเภท</span><b>${TL[type]}</b></div>
   <div class="row"><span>จำนวนเงิน</span><b>${fmt(amt)}</b></div><div class="row"><span>วันที่-เวลา</span><span>${fdt(_p.occurred_at)}</span></div>
   ${!ex&&_p.category?`<div class="row"><span>รายละเอียด</span><span>${esc(_p.category)}</span></div>`:''}${_p.owner?`<div class="row"><span>เจ้าของ</span><span>${esc(_p.owner)}</span></div>`:''}${ex}${from?line(from,-amt):''}${to?line(to,amt):''}</div>
-  <div class="btns" style="margin-top:14px"><button class="ghost" onclick="openAdd('${type}')">กลับไปแก้</button><button class="pri" onclick="confirmSave()">ยืนยันบันทึก</button></div>`);
+  <div class="btns" style="margin-top:14px"><button class="ghost" onclick="openAdd('${type}',true)">กลับไปแก้</button><button class="pri" onclick="confirmSave()">ยืนยันบันทึก</button></div>`);
 }
 async function confirmSave(){if(window._plan){const pl=window._plan;window._plan=null;await createPlan(pl);return}
+  if(window._edit){await saveEdit();return}
   const{lot,sale}=window._x||{};
   const t=await q(sb.from('transactions').insert(window._p).select().single());
   try{if(lot)await q(sb.from('security_lots').insert({...lot,buy_txn_id:t.id}));if(sale)await q(sb.from('security_sales').insert({...sale,sell_txn_id:t.id}))}
@@ -257,7 +259,7 @@ function openSlip(id){
   <div class="card" style="margin:14px 0">${t.from_account_id?row('จากบัญชี',esc(nm(t.from_account_id))):''}${t.to_account_id?row('เข้าบัญชี',esc(nm(t.to_account_id))):''}
   ${t.category&&!ex?row('รายละเอียด',esc(t.category)):''}${ex}${t.owner?row('เจ้าของ',esc(t.owner)):''}${t.note?row('หมายเหตุ',esc(t.note)):''}
   ${row('บันทึกเข้าระบบ','<span class="mut">'+fdt(t.created_at)+'</span>')}</div>
-  <button class="del" style="width:100%" onclick="delTxn('${t.id}')">ลบรายการนี้</button>`);
+  <div class="btns"><button class="del" onclick="delTxn('${t.id}')">ลบรายการนี้</button><button class="pri" onclick="openEdit('${t.id}')">แก้ไขรายการ</button></div>`);
 }
 async function delTxn(id){
   const lot=L.find(l=>l.buy_txn_id===id),sale=SL.find(s=>s.sell_txn_id===id);
@@ -302,7 +304,7 @@ function previewPlan(){const g=id=>$(id)?$(id).value:'',card=g('from'),title=g('
   window._plan={card,title,total,months:m,first,items};
   openSheet(`<h2 style="margin-top:0">ตรวจสอบแผนผ่อนชำระ</h2><div class="card"><div class="row"><span>บัตร</span><b>${esc(nm(card))}</b></div><div class="row"><span>สินค้า</span><span>${esc(title)}</span></div><div class="row"><span>ยอดรวมที่ผ่อน</span><b>${fmt(total)}</b></div><div class="row"><span>ผ่อน</span><span>${m} งวด × ${fmt(items[0].amount)}</span></div><div class="row"><span>งวดแรกครบกำหนด</span><span>${fdt2(first)}</span></div></div>
   <p class="mut">ยอดบัตรยังไม่เพิ่มตอนนี้ จะเพิ่มทีละงวดเมื่อกด "จ่ายแล้ว" ใน "แสดงรายการผ่อนชำระ" ของบัตรนี้</p>
-  <div class="btns"><button class="ghost" onclick="openAdd('card_purchase')">กลับไปแก้</button><button class="pri" onclick="confirmSave()">ยืนยันบันทึก</button></div>`)}
+  <div class="btns"><button class="ghost" onclick="openAdd('card_purchase',true)">กลับไปแก้</button><button class="pri" onclick="confirmSave()">ยืนยันบันทึก</button></div>`)}
 async function createPlan(p){const plan=await q(sb.from('installment_plans').insert({card_account_id:p.card,title:p.title,total_amount:p.total,months:p.months,first_due:p.first}).select().single());
   await q(sb.from('installment_items').insert(p.items.map(x=>({...x,plan_id:plan.id}))));closeSheet();await load();openPlans(p.card)}
 async function payInst(id){const i=II.find(x=>x.id===id),p=IP.find(x=>x.id===i.plan_id);
@@ -397,6 +399,31 @@ const incl=k=>k==='security'||SET['port_'+k]!=='off';
 const swKind=k=>`<span class="sw" title="นับรวมในพอร์ต"><input type="checkbox" aria-label="นับรวม${KT[k]}ในพอร์ต" ${incl(k)?'checked':''} onchange="toggleKind('${k}',this.checked)"><i></i></span>`;
 const portLabel=()=>['security','gold','fx'].filter(incl).map(k=>({security:'หุ้น/กองทุน',gold:'ทอง',fx:'เงินตรา'}[k])).join(' ');
 async function toggleKind(k,on){await q(sb.from('app_settings').upsert({key:'port_'+k,value:on?'on':'off'},{onConflict:'created_by,key'}));SET['port_'+k]=on?'on':'off';window._view==='portfolio'?openPortfolio():home()}
+function openAdd(type,keep){openAdd0(type);if(keep&&window._fv)restoreForm();else if(window._edit)fillEdit();editLocks()}
+const localDT=iso=>{const d=new Date(iso);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)};
+function fixFx(){const fl=$('fxl');if(!fl)return;const ty=window._type;
+  if(ty==='security_buy')fl.style.display=$('cur').value==='USD'?'flex':'none';
+  if(ty==='security_sell'){const l=L.find(x=>x.id===$('lotsel').value);fl.style.display=l&&l.currency==='USD'?'flex':'none'}}
+function restoreForm(){const f=window._fv||{};for(const id in f){const el=$(id);if(!el)continue;if(el.type==='checkbox')el.checked=f[id];else el.value=f[id]}
+  if($('inst')&&$('inst').checked)$('instbox').style.display='block';fixFx()}
+function editLocks(){const e=window._edit;if(!e)return;if(e.sale&&$('lotsel'))$('lotsel').disabled=true;const i=$('inst');if(i&&i.closest('.row'))i.closest('.row').style.display='none';const ib=$('instbox');if(ib)ib.style.display='none'}
+function fillEdit(){const e=window._edit,t=e.t,lot=e.lot,sale=e.sale,set=(id,v)=>{const el=$(id);if(el&&v!=null)el.value=v};
+  set('from',t.from_account_id);set('to',t.to_account_id);set('amt',t.amount);set('cat',t.category||'');set('own',t.owner||'');set('note',t.note||'');set('dt',localDT(t.occurred_at));
+  if(lot){set('hold',lot.holding_account_id);set('units',Number(lot.units));set('px',Number(lot.unit_price));set('fee',Number(lot.fee)||'');
+    if(lot.kind==='security'){set('sym',lot.symbol);set('cur',lot.currency);if(lot.currency==='USD')set('fx',Number(lot.fx_rate))}
+    if(lot.kind==='fx')set('cur',lot.symbol.replace('FX:',''))}
+  if(sale){set('lotsel',sale.lot_id);set('px',Number(sale.sell_price));const l=L.find(x=>x.id===sale.lot_id);if(l&&l.kind==='security'&&l.currency==='USD')set('fx',Number(sale.fx_rate))}
+  fixFx()}
+function openEdit(id){const t=T.find(x=>x.id===id);if(!t)return;const lot=L.find(l=>l.buy_txn_id===id),sale=SL.find(s=>s.sell_txn_id===id);
+  if(lot&&SL.some(s=>s.lot_id===lot.id)){alert('ล็อตนี้ถูกขายไปแล้ว แก้ไขรายการซื้อไม่ได้ ให้ลบหรือแก้รายการขายก่อน');return}
+  let type=t.txn_type;if(type==='transfer'){const to=A.find(a=>a.id===t.to_account_id),fr=A.find(a=>a.id===t.from_account_id);if(to&&to.account_type==='card'&&fr&&fr.account_type!=='card')type='card_payment'}
+  window._fv=null;window._edit={id,t,lot,sale};openAdd(type)}
+function cancelEdit(){const id=window._edit&&window._edit.id;window._edit=null;id?openSlip(id):closeSheet()}
+async function saveEdit(){const e=window._edit,{lot,sale}=window._x||{},p=window._p;
+  await q(sb.from('transactions').update({txn_type:p.txn_type,amount:p.amount,from_account_id:p.from_account_id,to_account_id:p.to_account_id,category:p.category,owner:p.owner,note:p.note,occurred_at:p.occurred_at}).eq('id',e.id));
+  if(lot&&e.lot)await q(sb.from('security_lots').update(lot).eq('id',e.lot.id));
+  if(sale&&e.sale){const{lot_id,...rest}=sale;await q(sb.from('security_sales').update(rest).eq('id',e.sale.id))}
+  closeSheet();load()}
 let HD=0;
 const dayStart=n=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-(n-1));return d};
 function setHD(d){HD=d;home()}
