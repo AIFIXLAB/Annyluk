@@ -259,7 +259,7 @@ function openSlip(id){
   <div class="card" style="margin:14px 0">${t.from_account_id?row('จากบัญชี',esc(nm(t.from_account_id))):''}${t.to_account_id?row('เข้าบัญชี',esc(nm(t.to_account_id))):''}
   ${t.category&&!ex?row('รายละเอียด',esc(t.category)):''}${ex}${t.owner?row('เจ้าของ',esc(t.owner)):''}${t.note?row('หมายเหตุ',esc(t.note)):''}
   ${row('บันทึกเข้าระบบ','<span class="mut">'+fdt(t.created_at)+'</span>')}</div>
-  <div class="btns"><button class="del" onclick="delTxn('${t.id}')">ลบรายการนี้</button><button class="pri" onclick="openEdit('${t.id}')">แก้ไขรายการ</button></div>`);
+  <div class="btns"><button class="del" onclick="delTxn('${t.id}')">ลบรายการนี้</button><button class="pri" onclick="openTxnEdit('${t.id}')">แก้ไขรายการ</button></div>`);
 }
 async function delTxn(id){
   const lot=L.find(l=>l.buy_txn_id===id),sale=SL.find(s=>s.sell_txn_id===id);
@@ -414,7 +414,7 @@ function fillEdit(){const e=window._edit,t=e.t,lot=e.lot,sale=e.sale,set=(id,v)=
     if(lot.kind==='fx')set('cur',lot.symbol.replace('FX:',''))}
   if(sale){set('lotsel',sale.lot_id);set('px',Number(sale.sell_price));const l=L.find(x=>x.id===sale.lot_id);if(l&&l.kind==='security'&&l.currency==='USD')set('fx',Number(sale.fx_rate))}
   fixFx()}
-function openEdit(id){const t=T.find(x=>x.id===id);if(!t)return;const lot=L.find(l=>l.buy_txn_id===id),sale=SL.find(s=>s.sell_txn_id===id);
+function openTxnEdit(id){const t=T.find(x=>x.id===id);if(!t)return;const lot=L.find(l=>l.buy_txn_id===id),sale=SL.find(s=>s.sell_txn_id===id);
   if(lot&&SL.some(s=>s.lot_id===lot.id)){alert('ล็อตนี้ถูกขายไปแล้ว แก้ไขรายการซื้อไม่ได้ ให้ลบหรือแก้รายการขายก่อน');return}
   let type=t.txn_type;if(type==='transfer'){const to=A.find(a=>a.id===t.to_account_id),fr=A.find(a=>a.id===t.from_account_id);if(to&&to.account_type==='card'&&fr&&fr.account_type!=='card')type='card_payment'}
   window._fv=null;window._edit={id,t,lot,sale};openAdd(type)}
