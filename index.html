@@ -102,7 +102,7 @@ function home(){window._view='home';
   <div class="hero"><div style="opacity:.9;font-size:14px">ยอดรวมบัญชีที่ไม่ใช่บัตร${nEx?` (ไม่รวม ${nEx} บัญชี)`:''}</div><div class="n">${fmt(tot)}</div><div style="font-size:13px;opacity:.9">หนี้บัตรเครดิตรวม ${fmt(-debt)}</div><div style="font-size:13px;opacity:.9">มูลค่าสินทรัพย์ลงทุน (${portLabel()}) ตามราคาล่าสุด ${fmt(portfolioTotal())}</div></div>
   ${notifyHTML()}${countdownHTML()}${staleBanner()}<div class="sec"><h2 style="margin:0">บัญชี</h2><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button onclick="openManage()">จัดการบัญชี</button><button onclick="openDay()">สรุปรายวัน</button><button onclick="openMonth()">สรุปรายเดือน</button></div></div><div class="mut" style="margin:-2px 0 4px">สวิตช์ท้ายแต่ละบัญชี: เปิด = นับรวมในยอดรวม · ปิด = ไม่รวม</div>`;
   if(!A.length)h+='<div class="card"><p class="mut">ยังไม่มีบัญชี กด "จัดการบัญชี" เพื่อเพิ่ม</p></div>';
-  for(const g in groups){h+=`<div class="mut" style="margin:12px 0 4px">${esc(g)}</div><div class="card">`+groups[g].map(a=>a.account_type==='card'?cardRow(a):`<div class="row${a.exclude_from_total?' off':''}"><span>${esc(a.nickname)}${a.exclude_from_total?' <span class="mut">· ไม่รวมในยอดรวม</span>':''}</span><span style="display:flex;align-items:center;gap:10px"><span class="b">${fmt(bal(a))}</span>${sw(a)}</span></div>`).join('')+'</div>'}
+  for(const g in groups){h+=`<div class="mut" style="margin:12px 0 4px">${esc(g)}</div><div class="card">`+groups[g].map(a=>a.account_type==='card'?cardRow(a):`<div class="row${a.exclude_from_total?' off':''}"><div>${esc(a.nickname)}${a.exclude_from_total?' <span class="mut">· ไม่รวมในยอดรวม</span>':''}${fxLines(a)}</div><span style="display:flex;align-items:center;gap:10px"><span class="b">${fmt(bal(a))}</span>${sw(a)}</span></div>`).join('')+'</div>'}
   h+=portfolioHTML('security')+portfolioHTML('gold')+portfolioHTML('fx');
   const hist=HD?T.filter(t=>new Date(t.occurred_at)>=dayStart(HD)):T.slice(0,50);
   const hi=hist.filter(t=>t.txn_type==='income').reduce((c,t)=>c+Number(t.amount),0),he=hist.filter(t=>t.txn_type==='expense'||t.txn_type==='card_purchase').reduce((c,t)=>c+Number(t.amount),0);
@@ -424,6 +424,12 @@ async function saveEdit(){const e=window._edit,{lot,sale}=window._x||{},p=window
   if(lot&&e.lot)await q(sb.from('security_lots').update(lot).eq('id',e.lot.id));
   if(sale&&e.sale){const{lot_id,...rest}=sale;await q(sb.from('security_sales').update(rest).eq('id',e.sale.id))}
   closeSheet();load()}
+const CUR_TH={JPY:'เยน',USD:'ดอลลาร์สหรัฐ',EUR:'ยูโร',GBP:'ปอนด์',CNY:'หยวน',SGD:'ดอลลาร์สิงคโปร์',AUD:'ดอลลาร์ออสเตรเลีย',KRW:'วอน',HKD:'ดอลลาร์ฮ่องกง',CHF:'ฟรังก์สวิส'};
+function fxLines(a){const m={};
+  for(const l of L){if(lotKind(l)!=='fx'||l.holding_account_id!==a.id||SL.some(s=>s.lot_id===l.id))continue;const h=m[l.symbol]=m[l.symbol]||{u:0,c:0};h.u+=Number(l.units);h.c+=Number(l.cost_thb)}
+  return Object.keys(m).map(sy=>{const h=m[sy],code=sy.replace('FX:',''),p=priceRow(sy),v=p?h.u*Number(p.price):null;
+    return `<div class="mut" style="margin-top:4px">เงิน${CUR_TH[code]||code}ที่แลกไว้: <b style="color:var(--ink)">${h.u.toLocaleString('th-TH',{maximumFractionDigits:4})} ${code}</b></div>
+    <div class="mut">แลกด้วยเงินบาท ${fmt(h.c)} · ${v==null?'ยังไม่ได้ตั้งอัตราแลกเปลี่ยน':'มูลค่าตอนนี้ '+fmt(v)+' (อัตรา '+Number(p.price)+')'}</div>`}).join('')}
 let HD=0;
 const dayStart=n=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-(n-1));return d};
 function setHD(d){HD=d;home()}
