@@ -49,7 +49,7 @@ const SB_URL='https://etqgjkeyoxgfncphtiao.supabase.co';
 const SB_KEY='sb_publishable_adz6BHqdK99sKdBnJsNk-g_PRRhpYTj';
 const TL={income:'รายรับ',expense:'รายจ่าย',transfer:'โอน',card_purchase:'รูดบัตร',card_payment:'ชำระบัตรเครดิต',security_buy:'ซื้อหุ้น/กองทุน',security_sell:'ขายหุ้น/กองทุน',gold_buy:'ซื้อทองคำ',gold_sell:'ขายทองคำ',fx_buy:'แลกเงินตราต่างประเทศ (เก็บไว้)',fx_sell:'แลกเงินตราต่างประเทศกลับเป็นบาท'};
 const AT={deposit:'เงินฝาก',card:'บัตรเครดิต',securities:'หุ้น/กองทุน',other:'อื่นๆ'};
-let sb,A=[],T=[],L=[],SL=[],PR=[],IP=[],II=[],TKS=[],IMP=[],PS=[],SET={};
+let sb,A=[],T=[],L=[],SL=[],PR=[],IP=[],II=[],TKS=[],IMP=[],PS=[],SET={},FS=[];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>(n<0?'-':'')+'฿'+Math.abs(Number(n)).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -85,6 +85,7 @@ async function load(){
   const tk=await sb.from('tasks').select('*').is('deleted_at',null);TKS=tk.error?[]:tk.data;
   const im=await sb.from('important_dates').select('*').is('deleted_at',null);IMP=im.error?[]:im.data;
   await loadSnaps();
+  const fs=await sb.from('fx_spends').select('*');FS=fs.error?[]:fs.data;
   const st=await sb.from('app_settings').select('*');SET={};(st.error?[]:st.data).forEach(r=>{SET[r.key]=r.value});
   home();
 }
@@ -108,7 +109,7 @@ function home(){window._view='home';
   const hi=hist.filter(t=>t.txn_type==='income').reduce((c,t)=>c+Number(t.amount),0),he=hist.filter(t=>t.txn_type==='expense'||t.txn_type==='card_purchase').reduce((c,t)=>c+Number(t.amount),0);
   h+=`<h2>ประวัติล่าสุด</h2><div class="hf">${[[0,'ล่าสุด'],[1,'1 วัน'],[7,'7 วัน'],[15,'15 วัน'],[30,'30 วัน']].map(([d,l])=>`<button class="chip${HD===d?' on':''}" onclick="setHD(${d})">${l}</button>`).join('')}</div>${HD?`<div class="mut" style="margin-bottom:8px">ย้อนหลัง ${HD} วัน (นับรวมวันนี้) · ${hist.length} รายการ · รายรับ ${fmt(hi)} · รายจ่าย ${fmt(he)}</div>`:''}<div class="card">`;
   h+=hist.length?hist.map(t=>{const inn=isIn(t);
-    return `<div class="row" onclick="openSlip('${t.id}')" style="cursor:pointer"><div><div>${TL[t.txn_type]}${t.category?' · '+esc(t.category):''}${t.owner?' · '+esc(t.owner):''}</div><div class="mut">${fdt(t.occurred_at)}</div></div><span class="b" style="color:${inn?'var(--pos)':t.txn_type==='transfer'?'var(--ink)':'var(--neg)'}">${t.txn_type==='transfer'?'':inn?'+':'-'}${fmt(t.amount)}</span></div>`}).join(''):`<p class="mut">${HD?'ไม่มีรายการในช่วงนี้':'ยังไม่มีรายการ กด "+ เพิ่มรายการ" เพื่อเริ่มบันทึก'}</p>`;
+    return `<div class="row" onclick="openSlip('${t.id}')" style="cursor:pointer"><div><div>${TL[t.txn_type]}${t.category?' · '+esc(t.category):''}${t.owner?' · '+esc(t.owner):''}${fxTag(t)}</div><div class="mut">${fdt(t.occurred_at)}</div></div><span class="b" style="color:${inn?'var(--pos)':t.txn_type==='transfer'?'var(--ink)':'var(--neg)'}">${t.txn_type==='transfer'?'':inn?'+':'-'}${fmt(t.amount)}</span></div>`}).join(''):`<p class="mut">${HD?'ไม่มีรายการในช่วงนี้':'ยังไม่มีรายการ กด "+ เพิ่มรายการ" เพื่อเริ่มบันทึก'}</p>`;
   $('app').innerHTML=h+'</div><button class="fab" onclick="openAdd(\'expense\')">+ เพิ่มรายการ</button>';
 }
 function nowLocal(){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)}
@@ -119,7 +120,7 @@ function openAdd0(type){
   const chips=`<label>ประเภทรายการ<select onchange="openAdd(this.value)"${window._edit?' disabled':''}>${ORDER.map(k=>`<option value="${k}"${k===type?' selected':''}>${TL[k]}</option>`).join('')}</select></label>`;
   let f='';
   if(type==='income')f=`<label>บัญชีที่รับเข้า<select id="to">${opts(A)}</select></label>`;
-  if(type==='expense')f=`<label>บัญชีที่จ่าย<select id="from">${opts(non)}</select></label>`;
+  if(type==='expense')f=expenseForm();
   if(type==='transfer')f=`<label>จากบัญชี<select id="from">${opts(A)}</select></label><label>ไปบัญชี (จ่ายบัตรคืน เลือกบัตรตรงนี้)<select id="to">${opts(A)}</select></label>`;
   if(type==='card_purchase')f=`<label>บัตรที่รูด<select id="from">${opts(cards)}</select></label>
   <div class="row" style="border:0;padding:4px 0 10px"><span>ผ่อนชำระ</span><span class="sw"><input type="checkbox" id="inst" aria-label="ผ่อนชำระ" onchange="toggleInst()"><i></i></span></div>
@@ -131,7 +132,7 @@ function openAdd0(type){
   const tf=typeForm(type);if(tf)f=tf;
   window._type=type;const sec=/^(security|gold|fx)_/.test(type);
   openSheet(`<h2 style="margin-top:0">${window._edit?'แก้ไขรายการ':'เพิ่มรายการ'}</h2>${chips}${f}
-  <label>${type.endsWith('_buy')?'ยอดที่จ่ายจริง (บาท)':isSellT(type)?'ยอดที่ได้รับ (บาท คำนวณให้)':'จำนวนเงิน (บาท)'}<input id="amt" type="number" inputmode="decimal" step="0.01" min="0" oninput="instCalc()"${isSellT(type)?' readonly':''}></label>
+  <label>${type.endsWith('_buy')?'ยอดที่จ่ายจริง (บาท)':isSellT(type)?'ยอดที่ได้รับ (บาท คำนวณให้)':'จำนวนเงิน (บาท)'}<input id="amt" type="number" inputmode="decimal" step="0.01" min="0" oninput="instCalc();if(window.xcCalc)xcCalc()"${isSellT(type)?' readonly':''}></label>
   ${sec?'':'<label>หมวด / รายละเอียด<input id="cat"></label>'}<label>วันที่-เวลา<input id="dt" type="datetime-local" value="${nowLocal()}"></label>
   <label>เจ้าของ (ไม่บังคับ เช่น ชื่อคนในครอบครัว เว้นว่างได้ถ้าเป็นของกลาง)<input id="own"></label><label>หมายเหตุ (ไม่บังคับ)<input id="note"></label><div class="err" id="fe"></div>
   <button class="pri" style="width:100%" onclick="preview('${type}')">ตรวจสอบก่อนบันทึก</button>${window._edit?`<button class="ghost" style="width:100%;margin-top:8px" onclick="cancelEdit()">ยกเลิกการแก้ไข</button>`:''}`);
@@ -153,7 +154,7 @@ function fxRate(c){const p=priceRow('FX:'+c)||(c==='USD'?priceRow('USDTHB'):null
 function fxNow(){return fxRate('USD')}
 function holdings(kind,inc){const m={};
   for(const l of L){if(lotKind(l)!==kind||SL.some(s=>s.lot_id===l.id)||(inc&&excl(l.holding_account_id)))continue;
-    const h=m[l.symbol]=m[l.symbol]||{sym:l.symbol,kind,cur:l.currency,units:0,cost:0};h.units+=Number(l.units);h.cost+=Number(l.cost_thb)}
+    const ru=remU(l);if(ru<=1e-6)continue;const h=m[l.symbol]=m[l.symbol]||{sym:l.symbol,kind,cur:l.currency,units:0,cost:0};h.units+=ru;h.cost+=remC(l)}
   return Object.values(m).map(h=>{const p=priceRow(kind==='gold'?'GOLD':h.sym);h.price=p?Number(p.price):null;h.asof=p?p.as_of:null;let v=null;
     if(h.price!=null){if(kind==='gold')v=h.units/GRAM*h.price;else if(kind==='fx')v=h.units*h.price;else{const fx=h.cur==='USD'?fxNow():1;v=fx!=null?h.units*h.price*fx:null}}
     h.value=v;h.pl=v==null?null:v-h.cost;return h})}
@@ -199,9 +200,9 @@ function fxBuyForm(){const non=A.filter(a=>a.account_type!=='card');
   <label>จำนวนเงินตราต่างประเทศที่ได้<input id="units" type="number" step="any" inputmode="decimal" oninput="recalc()"></label>
   <label>อัตราแลกเปลี่ยน (บาทต่อ 1 หน่วย)<input id="px" type="number" step="any" inputmode="decimal" oninput="recalc()"></label>
   <label>ค่าธรรมเนียม (บาท ไม่บังคับ)<input id="fee" type="number" step="0.01" inputmode="decimal" oninput="recalc()"></label>`}
-function lotSellForm(kind){const ul=L.filter(l=>lotKind(l)===kind&&(!SL.some(s=>s.lot_id===l.id)||(window._edit&&window._edit.sale&&window._edit.sale.lot_id===l.id)));
+function lotSellForm(kind){const ul=L.filter(l=>lotKind(l)===kind&&(!SL.some(s=>s.lot_id===l.id)||(window._edit&&window._edit.sale&&window._edit.sale.lot_id===l.id))&&remU(l)>1e-6);
   const pl=kind==='gold'?'ราคาขาย ณ วันนี้ (บาทละ)':kind==='fx'?'อัตราแลกเปลี่ยนวันนี้ (บาทต่อ 1 หน่วย)':'ราคาขายต่อหน่วย (ตามสกุลเงินของล็อต)';
-  return `<label>ล็อตที่จะขาย (ขายทั้งล็อต)<select id="lotsel" onchange="recalc()"><option value="">${ul.length?'เลือกล็อต':'ไม่มีล็อตที่ถืออยู่'}</option>${ul.map(l=>`<option value="${l.id}">${esc(symLabel(l.symbol,kind))} · ${fdt(lotDate(l))} · ${unitLabel(kind,l.units,l.symbol)} · ต้นทุน ${fmt(l.cost_thb)}</option>`).join('')}</select></label>
+  return `<label>ล็อตที่จะขาย (ขายทั้งล็อต)<select id="lotsel" onchange="recalc()"><option value="">${ul.length?'เลือกล็อต':'ไม่มีล็อตที่ถืออยู่'}</option>${ul.map(l=>`<option value="${l.id}">${esc(symLabel(l.symbol,kind))} · ${fdt(lotDate(l))} · ${unitLabel(kind,remU(l),l.symbol)} · ต้นทุน ${fmt(remC(l))}</option>`).join('')}</select></label>
   <label>${pl}<input id="px" type="number" step="any" inputmode="decimal" oninput="recalc()"></label>
   <label id="fxl" style="display:none">อัตราแลกเปลี่ยน (บาทต่อ 1 USD)<input id="fx" type="number" step="any" inputmode="decimal" oninput="recalc()"></label>
   <label>บัญชีที่รับเงิน<select id="to">${opts(A.filter(a=>a.account_type!=='card'))}</select></label>`}
@@ -212,12 +213,12 @@ function recalc(){const g=id=>$(id)?$(id).value:'',n=id=>Number(g(id)),ty=window
   if(ty==='gold_buy')setAmt(n('units')/GRAM*n('px')+(n('fee')||0));
   if(ty==='fx_buy')setAmt(n('units')*n('px')+(n('fee')||0));
   if(isSellT(ty)){const l=L.find(x=>x.id===g('lotsel'));if(!l)return;const k=lotKind(l);let v;
-    if(k==='gold')v=Number(l.units)/GRAM*n('px');else if(k==='fx')v=Number(l.units)*n('px');else{const usd=l.currency==='USD';fl.style.display=usd?'flex':'none';v=Number(l.units)*n('px')*(usd?n('fx'):1)}
+    if(k==='gold')v=remU(l)/GRAM*n('px');else if(k==='fx')v=remU(l)*n('px');else{const usd=l.currency==='USD';fl.style.display=usd?'flex':'none';v=remU(l)*n('px')*(usd?n('fx'):1)}
     setAmt(v)}}
 function preview(type){window._fv={};document.querySelectorAll('#sheet [id]').forEach(el=>{if(['INPUT','SELECT','TEXTAREA'].includes(el.tagName))window._fv[el.id]=el.type==='checkbox'?el.checked:el.value});window._plan=null;if(type==='card_purchase'&&$('inst')&&$('inst').checked)return previewPlan();
-  const g=id=>$(id)?$(id).value:'',amt=Number(g('amt')),from=g('from')||null,to=g('to')||null,e=$('fe'),sell=isSellT(type),buy=type.endsWith('_buy'),kind=kindOf(type);
+  const g=id=>$(id)?$(id).value:'',amt=Number(g('amt')),fxc=(type==='expense'&&g('xc')&&g('xc')!=='THB')?g('xc'):'',from=fxc?null:(g('from')||null),to=g('to')||null,e=$('fe'),sell=isSellT(type),buy=type.endsWith('_buy'),kind=kindOf(type);
   if(!(amt>0)){e.textContent='ใส่จำนวนเงินมากกว่า 0 (ถ้าเป็นสินทรัพย์ลงทุน ใส่จำนวนและราคาให้ครบ)';return}
-  if(type!=='income'&&!sell&&!from){e.textContent='เลือกบัญชีที่จ่าย';return}
+  if(type!=='income'&&!sell&&!from&&!fxc){e.textContent='เลือกบัญชีที่จ่าย';return}
   if((type==='income'||type==='transfer'||type==='card_payment'||sell)&&!to){e.textContent='เลือกบัญชีที่รับ';return}
   if((type==='transfer'||type==='card_payment')&&from===to){e.textContent='บัญชีต้นทางกับปลายทางต้องไม่ซ้ำกัน';return}
   if(!g('dt')){e.textContent='ใส่วันที่-เวลา';return}
@@ -232,22 +233,28 @@ function preview(type){window._fv={};document.querySelectorAll('#sheet [id]').fo
     ex=row('รายการ',esc(symLabel(sy,kind)))+row('จำนวน',unitLabel(kind,u,sy))+row(kind==='gold'?'ราคา/บาททอง':'ราคา/อัตรา',`${px} ${cur}`)+row('บัญชีที่เก็บ',esc(nm(g('hold'))))}
   if(sell){const l=L.find(x=>x.id===g('lotsel')),px=Number(g('px')),k=l?lotKind(l):'',fx=l&&k==='security'&&l.currency==='USD'?Number(g('fx')):1;
     if(!l||!(px>0)||!(fx>0)){e.textContent='เลือกล็อต ใส่ราคา/อัตราขาย (และอัตรา USD/THB ถ้าเป็นหุ้น USD)';return}
-    const profit=Math.round((amt-Number(l.cost_thb))*100)/100;
-    sale={lot_id:l.id,units:l.units,sell_price:px,fx_rate:fx,proceeds:amt,cost_thb:l.cost_thb,profit};cat=symLabel(l.symbol,k);
-    ex=row('ขายล็อต',esc(symLabel(l.symbol,k))+' · '+unitLabel(k,l.units,l.symbol))+row('ต้นทุนล็อต',fmt(l.cost_thb))+`<div class="row"><span class="b">กำไร/ขาดทุน</span><b style="color:${profit>=0?'var(--pos)':'var(--neg)'}">${profit>=0?'+':''}${fmt(profit)}</b></div>`}
-  window._p={txn_type:type==='card_payment'?'transfer':type,amount:amt,from_account_id:from,to_account_id:to,category:cat,owner:g('own').trim()||null,note:g('note').trim()||null,occurred_at:new Date(g('dt')).toISOString()};window._x={lot,sale};
+    const profit=Math.round((amt-remC(l))*100)/100;
+    sale={lot_id:l.id,units:remU(l),sell_price:px,fx_rate:fx,proceeds:amt,cost_thb:remC(l),profit};cat=symLabel(l.symbol,k);
+    ex=row('ขายล็อต',esc(symLabel(l.symbol,k))+' · '+unitLabel(k,remU(l),l.symbol))+row('ต้นทุนล็อต',fmt(remC(l)))+`<div class="row"><span class="b">กำไร/ขาดทุน</span><b style="color:${profit>=0?'var(--pos)':'var(--neg)'}">${profit>=0?'+':''}${fmt(profit)}</b></div>`}
+  let amtB=amt,spends=[];
+  if(fxc){const acc=g('xa');if(!acc){e.textContent='เลือกบัญชีเงินตราต่างประเทศที่ใช้จ่าย';return}
+    const r=fifoSpend(acc,fxc,amt,window._edit?window._edit.id:null);
+    if(r.short>0){e.textContent=`เงิน ${fxc} ในบัญชีนี้ไม่พอ (ขาดอีก ${Number(r.short.toFixed(4)).toLocaleString('th-TH')} ${fxc})`;return}
+    amtB=r.cost;spends=r.out;cat=g('cat').trim()||null;
+    ex=row('จ่ายด้วย',`${amt.toLocaleString('th-TH')} ${fxc}`)+row('จากบัญชี',esc(nm(acc)))+row('เทียบเป็นเงินบาท (ต้นทุนที่แลกมา)',fmt(amtB))+(cat?row('รายละเอียด',esc(cat)):'')}
+  window._p={txn_type:type==='card_payment'?'transfer':type,amount:amtB,from_account_id:from,to_account_id:to,category:cat,owner:g('own').trim()||null,note:g('note').trim()||null,occurred_at:new Date(g('dt')).toISOString()};window._x={lot,sale,spends};
   const oe=id=>{const e=window._edit;if(!e)return 0;const o=e.t,x=Number(o.amount);return(o.to_account_id===id?x:0)-(o.from_account_id===id?x:0)};
   const line=(id,d)=>{const a=A.find(x=>x.id===id),b=bal(a)-oe(id);return `<div class="row"><span>${esc(a.nickname)}</span><span>${fmt(b)} → <b>${fmt(b+d)}</b></span></div>`};
   openSheet(`<h2 style="margin-top:0">ตรวจสอบก่อนบันทึก</h2><div class="card"><div class="row"><span>ประเภท</span><b>${TL[type]}</b></div>
-  <div class="row"><span>จำนวนเงิน</span><b>${fmt(amt)}</b></div><div class="row"><span>วันที่-เวลา</span><span>${fdt(_p.occurred_at)}</span></div>
+  <div class="row"><span>จำนวนเงิน</span><b>${fmt(amtB)}</b></div><div class="row"><span>วันที่-เวลา</span><span>${fdt(_p.occurred_at)}</span></div>
   ${!ex&&_p.category?`<div class="row"><span>รายละเอียด</span><span>${esc(_p.category)}</span></div>`:''}${_p.owner?`<div class="row"><span>เจ้าของ</span><span>${esc(_p.owner)}</span></div>`:''}${ex}${from?line(from,-amt):''}${to?line(to,amt):''}</div>
   <div class="btns" style="margin-top:14px"><button class="ghost" onclick="openAdd('${type}',true)">กลับไปแก้</button><button class="pri" onclick="confirmSave()">ยืนยันบันทึก</button></div>`);
 }
 async function confirmSave(){if(window._plan){const pl=window._plan;window._plan=null;await createPlan(pl);return}
   if(window._edit){await saveEdit();return}
-  const{lot,sale}=window._x||{};
+  const{lot,sale,spends}=window._x||{};
   const t=await q(sb.from('transactions').insert(window._p).select().single());
-  try{if(lot)await q(sb.from('security_lots').insert({...lot,buy_txn_id:t.id}));if(sale)await q(sb.from('security_sales').insert({...sale,sell_txn_id:t.id}))}
+  try{if(lot)await q(sb.from('security_lots').insert({...lot,buy_txn_id:t.id}));if(sale)await q(sb.from('security_sales').insert({...sale,sell_txn_id:t.id}));if(spends&&spends.length)await q(sb.from('fx_spends').insert(spends.map(x=>({...x,txn_id:t.id}))))}
   catch(x){await sb.from('transactions').update({deleted_at:new Date().toISOString()}).eq('id',t.id);load();return}
   closeSheet();load()}
 function openSlip(id){
@@ -255,6 +262,7 @@ function openSlip(id){
   const row=(a,b)=>`<div class="row"><span>${a}</span><span>${b}</span></div>`;
   if(lot){const k=lotKind(lot);ex=row('รายการ',esc(symLabel(lot.symbol,k)))+row('จำนวน',unitLabel(k,lot.units,lot.symbol))+row(k==='gold'?'ราคา/บาททอง':'ราคา/อัตรา',`${Number(lot.unit_price)} ${lot.currency}${lot.currency==='USD'?' · อัตรา '+Number(lot.fx_rate):''}`)+row('บัญชีที่เก็บ',esc(nm(lot.holding_account_id)))+(Number(lot.fee)?row('ค่าธรรมเนียม',fmt(lot.fee)):'')}
   if(sale){const sl=L.find(l=>l.id===sale.lot_id),k=sl?lotKind(sl):'security';ex=row('ขายล็อต',sl?esc(symLabel(sl.symbol,k))+' · ซื้อเมื่อ '+fdt(lotDate(sl)):'-')+row('จำนวน',unitLabel(k,sale.units,sl?sl.symbol:''))+row('ราคา/อัตราขาย',Number(sale.sell_price))+row('ต้นทุนล็อต',fmt(sale.cost_thb))+`<div class="row"><b>กำไร/ขาดทุน</b><b style="color:${sale.profit>=0?'var(--pos)':'var(--neg)'}">${sale.profit>=0?'+':''}${fmt(sale.profit)}</b></div>`}
+  const sp=FS.filter(x=>x.txn_id===id);if(sp.length){const l0=L.find(x=>x.id===sp[0].lot_id),code=l0?l0.symbol.replace('FX:',''):'';ex=row('จ่ายด้วย',`${Number(sp.reduce((a,x)=>a+Number(x.units),0).toFixed(4)).toLocaleString('th-TH')} ${code}`)+row('จากบัญชี',esc(nm(l0?l0.holding_account_id:'')))+row('เทียบเป็นเงินบาท (ต้นทุน)',fmt(t.amount))+(t.category?row('รายละเอียด',esc(t.category)):'')}
   openSheet(`<div style="text-align:center"><div class="mut">${TL[t.txn_type]}</div><div style="font-size:34px;font-weight:600;color:${inn?'var(--pos)':'var(--neg)'}">${inn?'+':t.txn_type==='transfer'?'':'-'}${fmt(t.amount)}</div><div class="mut">${fdt(t.occurred_at)}</div></div>
   <div class="card" style="margin:14px 0">${t.from_account_id?row('จากบัญชี',esc(nm(t.from_account_id))):''}${t.to_account_id?row('เข้าบัญชี',esc(nm(t.to_account_id))):''}
   ${t.category&&!ex?row('รายละเอียด',esc(t.category)):''}${ex}${t.owner?row('เจ้าของ',esc(t.owner)):''}${t.note?row('หมายเหตุ',esc(t.note)):''}
@@ -264,7 +272,9 @@ function openSlip(id){
 async function delTxn(id){
   const lot=L.find(l=>l.buy_txn_id===id),sale=SL.find(s=>s.sell_txn_id===id);
   if(lot&&SL.some(s=>s.lot_id===lot.id)){alert('ล็อตนี้ถูกขายไปแล้ว ลบรายการขายก่อน แล้วค่อยลบรายการซื้อ');return}
+  if(lot&&FS.some(x=>x.lot_id===lot.id)){alert('มีการใช้จ่ายจากเงินตราล็อตนี้แล้ว ลบรายการใช้จ่ายก่อน แล้วค่อยลบรายการแลกเงิน');return}
   if(!confirm('ลบรายการนี้? (ยอดบัญชีจะคืนค่า และมีประวัติการแก้ไขเก็บไว้)'))return;
+  if(FS.some(x=>x.txn_id===id))await q(sb.from('fx_spends').delete().eq('txn_id',id));
   if(sale)await q(sb.from('security_sales').delete().eq('sell_txn_id',id));
   if(lot)await q(sb.from('security_lots').delete().eq('id',lot.id));
   await q(sb.from('transactions').update({deleted_at:new Date().toISOString()}).eq('id',id));closeSheet();load()}
@@ -331,6 +341,9 @@ function exportXlsx(ym){
   SL.forEach(s=>{const l=L.find(x=>x.id===s.lot_id),t=T.find(x=>x.id===s.sell_txn_id),k=l?lotKind(l):'security';sl.push([t?d2(t.occurred_at)[0]:'',KT[k],l?symLabel(l.symbol,k):'',Number(s.units),Number(s.sell_price),Number(s.proceeds),Number(s.cost_thb),Number(s.profit)])});add(sl,'ขายสินทรัพย์');
   const ip=[['ผ่อนชำระบัตรเครดิต'],[],['บัตร','รายการ','งวดที่','ครบกำหนด','ยอดต่องวด (บาท)','สถานะ']];
   IP.forEach(p=>II.filter(i=>i.plan_id===p.id).sort((a,b)=>a.seq-b.seq).forEach(i=>ip.push([nm(p.card_account_id),p.title,i.seq+'/'+p.months,i.due_date,Number(i.amount),paidItem(i)?'จ่ายแล้ว':'ยังไม่จ่าย'])));add(ip,'ผ่อนชำระ');
+  const fe=[['ใช้จ่ายด้วยเงินตราต่างประเทศ เดือน '+ym],[],['วันที่','เวลา','รายละเอียด','บัญชีเงินตรา','จำนวน','สกุล','เทียบเป็นบาท (ต้นทุน)']];
+  T.filter(t=>{const d=new Date(t.occurred_at);return d>=s0&&d<e0&&FS.some(x=>x.txn_id===t.id)}).sort((a,b)=>new Date(a.occurred_at)-new Date(b.occurred_at)).forEach(t=>{const sp=FS.filter(x=>x.txn_id===t.id),l0=L.find(x=>x.id===sp[0].lot_id),[dd,tt]=d2(t.occurred_at);fe.push([dd,tt,t.category||'',nm(l0?l0.holding_account_id:''),sp.reduce((a,x)=>a+Number(x.units),0),l0?l0.symbol.replace('FX:',''):'',Number(t.amount)])});
+  if(fe.length>3)add(fe,'ใช้จ่ายเงินตรา');
   const hb=batches().slice().reverse(),hr=[['ประวัติกำไรพอร์ตลงทุน (บันทึกทุกครั้งที่อัปเดตราคา)'],[],['วันที่','เงินลงทุน (บาท)','มูลค่าปัจจุบัน (บาท)','กำไร/ขาดทุน (บาท)','เปลี่ยนจากครั้งก่อน (บาท)']];
   hb.forEach((b,i)=>hr.push([d2(b.t)[0]+' '+d2(b.t)[1],b.cost,b.val,b.pl,i?b.pl-hb[i-1].pl:'']));add(hr,'ประวัติกำไร');
   XLSX.writeFile(wb,'AnnyLuk_'+ym+'.xlsx');
@@ -405,7 +418,8 @@ function fixFx(){const fl=$('fxl');if(!fl)return;const ty=window._type;
   if(ty==='security_buy')fl.style.display=$('cur').value==='USD'?'flex':'none';
   if(ty==='security_sell'){const l=L.find(x=>x.id===$('lotsel').value);fl.style.display=l&&l.currency==='USD'?'flex':'none'}}
 function restoreForm(){const f=window._fv||{};for(const id in f){const el=$(id);if(!el)continue;if(el.type==='checkbox')el.checked=f[id];else el.value=f[id]}
-  if($('inst')&&$('inst').checked)$('instbox').style.display='block';fixFx()}
+  if($('inst')&&$('inst').checked)$('instbox').style.display='block';
+  if($('xc')&&$('xc').value!=='THB'){const v=f.xa;xcChange();if(v)$('xa').value=v;if(f.amt!=null)$('amt').value=f.amt;xcCalc()}fixFx()}
 function editLocks(){const e=window._edit;if(!e)return;if(e.sale&&$('lotsel'))$('lotsel').disabled=true;const i=$('inst');if(i&&i.closest('.row'))i.closest('.row').style.display='none';const ib=$('instbox');if(ib)ib.style.display='none'}
 function fillEdit(){const e=window._edit,t=e.t,lot=e.lot,sale=e.sale,set=(id,v)=>{const el=$(id);if(el&&v!=null)el.value=v};
   set('from',t.from_account_id);set('to',t.to_account_id);set('amt',t.amount);set('cat',t.category||'');set('own',t.owner||'');set('note',t.note||'');set('dt',localDT(t.occurred_at));
@@ -413,23 +427,47 @@ function fillEdit(){const e=window._edit,t=e.t,lot=e.lot,sale=e.sale,set=(id,v)=
     if(lot.kind==='security'){set('sym',lot.symbol);set('cur',lot.currency);if(lot.currency==='USD')set('fx',Number(lot.fx_rate))}
     if(lot.kind==='fx')set('cur',lot.symbol.replace('FX:',''))}
   if(sale){set('lotsel',sale.lot_id);set('px',Number(sale.sell_price));const l=L.find(x=>x.id===sale.lot_id);if(l&&l.kind==='security'&&l.currency==='USD')set('fx',Number(sale.fx_rate))}
+  const sp=FS.filter(x=>x.txn_id===t.id);if(sp.length&&$('xc')){const l0=L.find(x=>x.id===sp[0].lot_id);if(l0){$('xc').value=l0.symbol.replace('FX:','');xcChange();$('xa').value=l0.holding_account_id;set('amt',Number(sp.reduce((a,x)=>a+Number(x.units),0).toFixed(6)));xcCalc()}}
   fixFx()}
 function openTxnEdit(id){const t=T.find(x=>x.id===id);if(!t)return;const lot=L.find(l=>l.buy_txn_id===id),sale=SL.find(s=>s.sell_txn_id===id);
   if(lot&&SL.some(s=>s.lot_id===lot.id)){alert('ล็อตนี้ถูกขายไปแล้ว แก้ไขรายการซื้อไม่ได้ ให้ลบหรือแก้รายการขายก่อน');return}
+  if(lot&&FS.some(x=>x.lot_id===lot.id)){alert('มีการใช้จ่ายจากเงินตราล็อตนี้แล้ว แก้ไขรายการแลกเงินไม่ได้ ให้ลบรายการใช้จ่ายก่อน');return}
   let type=t.txn_type;if(type==='transfer'){const to=A.find(a=>a.id===t.to_account_id),fr=A.find(a=>a.id===t.from_account_id);if(to&&to.account_type==='card'&&fr&&fr.account_type!=='card')type='card_payment'}
   window._fv=null;window._edit={id,t,lot,sale};openAdd(type)}
 function cancelEdit(){const id=window._edit&&window._edit.id;window._edit=null;id?openSlip(id):closeSheet()}
-async function saveEdit(){const e=window._edit,{lot,sale}=window._x||{},p=window._p;
+async function saveEdit(){const e=window._edit,{lot,sale,spends}=window._x||{},p=window._p;
   await q(sb.from('transactions').update({txn_type:p.txn_type,amount:p.amount,from_account_id:p.from_account_id,to_account_id:p.to_account_id,category:p.category,owner:p.owner,note:p.note,occurred_at:p.occurred_at}).eq('id',e.id));
   if(lot&&e.lot)await q(sb.from('security_lots').update(lot).eq('id',e.lot.id));
   if(sale&&e.sale){const{lot_id,...rest}=sale;await q(sb.from('security_sales').update(rest).eq('id',e.sale.id))}
+  if(p.txn_type==='expense'&&((spends&&spends.length)||FS.some(x=>x.txn_id===e.id))){await q(sb.from('fx_spends').delete().eq('txn_id',e.id));if(spends&&spends.length)await q(sb.from('fx_spends').insert(spends.map(x=>({...x,txn_id:e.id}))))}
   closeSheet();load()}
 const CUR_TH={JPY:'เยน',USD:'ดอลลาร์สหรัฐ',EUR:'ยูโร',GBP:'ปอนด์',CNY:'หยวน',SGD:'ดอลลาร์สิงคโปร์',AUD:'ดอลลาร์ออสเตรเลีย',KRW:'วอน',HKD:'ดอลลาร์ฮ่องกง',CHF:'ฟรังก์สวิส'};
 function fxLines(a){const m={};
-  for(const l of L){if(lotKind(l)!=='fx'||l.holding_account_id!==a.id||SL.some(s=>s.lot_id===l.id))continue;const h=m[l.symbol]=m[l.symbol]||{u:0,c:0};h.u+=Number(l.units);h.c+=Number(l.cost_thb)}
+  for(const l of L){if(lotKind(l)!=='fx'||l.holding_account_id!==a.id||SL.some(s=>s.lot_id===l.id))continue;const ru=remU(l);if(ru<=1e-6)continue;const h=m[l.symbol]=m[l.symbol]||{u:0,c:0};h.u+=ru;h.c+=remC(l)}
   return Object.keys(m).map(sy=>{const h=m[sy],code=sy.replace('FX:',''),p=priceRow(sy),v=p?h.u*Number(p.price):null;
     return `<div class="mut" style="margin-top:4px">เงิน${CUR_TH[code]||code}ที่แลกไว้: <b style="color:var(--ink)">${h.u.toLocaleString('th-TH',{maximumFractionDigits:4})} ${code}</b></div>
-    <div class="mut">แลกด้วยเงินบาท ${fmt(h.c)} · ${v==null?'ยังไม่ได้ตั้งอัตราแลกเปลี่ยน':'มูลค่าตอนนี้ '+fmt(v)+' (อัตรา '+Number(p.price)+')'}</div>`}).join('')}
+    <div class="mut">ต้นทุนเป็นเงินบาท ${fmt(h.c)} · ${v==null?'ยังไม่ได้ตั้งอัตราแลกเปลี่ยน':'มูลค่าตอนนี้ '+fmt(v)+' (อัตรา '+Number(p.price)+')'}</div>`}).join('')}
+const spU=(l,ex)=>FS.filter(s=>s.lot_id===l.id&&s.txn_id!==ex).reduce((a,s)=>a+Number(s.units),0);
+const remU=(l,ex)=>Math.round((Number(l.units)-spU(l,ex))*1e6)/1e6;
+const remC=(l,ex)=>Math.round((Number(l.cost_thb)-FS.filter(s=>s.lot_id===l.id&&s.txn_id!==ex).reduce((a,s)=>a+Number(s.cost_thb),0))*100)/100;
+const exId=()=>window._edit?window._edit.id:null;
+function fxLots(acc,code,ex){return L.filter(l=>lotKind(l)==='fx'&&l.symbol==='FX:'+code&&(!acc||l.holding_account_id===acc)&&!SL.some(s=>s.lot_id===l.id)&&remU(l,ex)>1e-6).sort((a,b)=>new Date(lotDate(a))-new Date(lotDate(b)))}
+function fifoSpend(acc,code,units,ex){let need=units;const out=[];let cost=0;
+  for(const l of fxLots(acc,code,ex)){if(need<=1e-9)break;const ru=remU(l,ex),rc=remC(l,ex),take=Math.min(ru,need),c=take>=ru-1e-9?rc:Math.round(rc*(take/ru)*100)/100;out.push({lot_id:l.id,units:Math.round(take*1e6)/1e6,cost_thb:c});cost+=c;need-=take}
+  return{out,cost:Math.round(cost*100)/100,short:need>1e-6?need:0}}
+function fxCodes(ex){return[...new Set(L.filter(l=>lotKind(l)==='fx').map(l=>l.symbol.replace('FX:','')))].filter(c=>fxLots(null,c,ex).length)}
+function expenseForm(){const ex=exId(),non=A.filter(a=>a.account_type!=='card'),cs=fxCodes(ex);
+  return `<label>สกุลเงินที่ใช้จ่าย<select id="xc" onchange="xcChange()"><option value="THB">บาท (THB)</option>${cs.map(c=>`<option value="${c}">${CUR_TH[c]||c} (${c})</option>`).join('')}</select></label>
+  <div id="xthb"><label>บัญชีที่จ่าย<select id="from">${opts(non)}</select></label></div>
+  <div id="xfx" style="display:none"><label>จ่ายจากเงินตราในบัญชี (เช่น YouTrip หรือเงินสดที่แลกไว้)<select id="xa" onchange="xcCalc()"></select></label><div class="mut" id="xi" style="margin:-6px 0 10px"></div></div>`}
+function xcChange(){const c=$('xc').value,fx=c!=='THB',ex=exId();$('xthb').style.display=fx?'none':'block';$('xfx').style.display=fx?'block':'none';
+  const lab=$('amt').parentNode.childNodes[0];if(lab&&lab.nodeType===3)lab.textContent=fx?`จำนวนเงิน (${c})`:'จำนวนเงิน (บาท)';
+  if(fx){const accs={};fxLots(null,c,ex).forEach(l=>{accs[l.holding_account_id]=(accs[l.holding_account_id]||0)+remU(l,ex)});
+    $('xa').innerHTML='<option value="">เลือกบัญชี</option>'+Object.keys(accs).map(id=>`<option value="${id}">${esc(nm(id))} · เหลือ ${Number(accs[id].toFixed(4)).toLocaleString('th-TH')} ${c}</option>`).join('')}
+  xcCalc()}
+function xcCalc(){const xi=$('xi');if(!xi||!$('xc')||$('xc').value==='THB')return;const c=$('xc').value,a=$('xa').value,u=Number($('amt').value);if(!a||!(u>0)){xi.textContent='';return}
+  const r=fifoSpend(a,c,u,exId());xi.textContent=r.short>0?'เงินในบัญชีนี้ไม่พอ':`เทียบเป็นเงินบาท (ต้นทุนที่แลกมา) ≈ ${fmt(r.cost)}`}
+function fxTag(t){const sp=FS.filter(s=>s.txn_id===t.id);if(!sp.length)return '';const l=L.find(x=>x.id===sp[0].lot_id);return l?` · ${Number(sp.reduce((a,s)=>a+Number(s.units),0).toFixed(4)).toLocaleString('th-TH')} ${l.symbol.replace('FX:','')}`:''}
 let HD=0;
 const dayStart=n=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-(n-1));return d};
 function setHD(d){HD=d;home()}
