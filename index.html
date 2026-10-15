@@ -91,7 +91,7 @@ async function load(){
 }
 function cardRow(a){const b=bal(a),used=Math.max(0,-b),lim=Number(a.credit_limit||0),ps=IP.filter(p=>p.card_account_id===a.id);
   const pl=ps.length?`<div class="mut">ผ่อนอยู่ ${ps.length} รายการ · ต่องวดรวม ${fmt(ps.reduce((t,p)=>{const st=planStat(p);return t+(st.remain>0?st.per:0)},0))} · เหลือรวม ${fmt(ps.reduce((t,p)=>t+planStat(p).remain,0))}</div>`:'';
-  return `<div class="row${a.exclude_from_total?' off':''}" style="align-items:flex-start"><div><div>${esc(a.nickname)}${a.exclude_from_total?' <span class="mut">· ไม่รวมในยอดรวม</span>':''}</div>${lim?`<div class="mut">ใช้ไป ${fmt(used)} จากวงเงิน ${fmt(lim)} · เหลือ ${fmt(lim-used)}</div>`:'<div class="mut">ยังไม่ได้ตั้งวงเงิน</div>'}${pl}<a href="#" class="lk" onclick="setLimit('${a.id}');return false">แก้ไขวงเงิน</a> · <a href="#" class="lk" onclick="openPlans('${a.id}');return false">แสดงรายการผ่อนชำระ${ps.length?' ('+ps.length+')':''}</a></div><span style="display:flex;align-items:center;gap:10px"><span class="b">${fmt(b)}</span>${sw(a)}</span></div>`}
+  return `<div class="row${a.exclude_from_total?' off':''}" style="align-items:flex-start"><div><div>${esc(a.nickname)}${a.exclude_from_total?' <span class="mut">· ไม่รวมในยอดรวม</span>':''}</div>${lim?`<div class="mut">ใช้ไป ${fmt(used)} จากวงเงิน ${fmt(lim)} · เหลือ ${fmt(lim-used)}</div>`:'<div class="mut">ยังไม่ได้ตั้งวงเงิน</div>'}${pl}<a href="#" class="lk" onclick="setLimit('${a.id}');return false">แก้ไขวงเงิน</a> · <a href="#" class="lk" onclick="openPlans('${a.id}');return false">แสดงรายการผ่อนชำระ${ps.length?' ('+ps.length+')':''}</a><div style="margin-top:6px"><button class="ghost" style="min-height:36px;font-size:13px" onclick="openCardHist('${a.id}')">ดูประวัติรูดบัตร</button></div></div><span style="display:flex;align-items:center;gap:10px"><span class="b">${fmt(b)}</span>${sw(a)}</span></div>`}
 async function setLimit(id){const a=A.find(x=>x.id===id),v=prompt('วงเงินของ '+a.nickname+' (บาท)',a.credit_limit||'');if(v===null)return;
   const n=Number(v);if(!(n>=0)){alert('ใส่ตัวเลขวงเงิน');return}await q(sb.from('accounts').update({credit_limit:n}).eq('id',id));load()}
 function home(){window._view='home';
@@ -468,6 +468,30 @@ function xcChange(){const c=$('xc').value,fx=c!=='THB',ex=exId();$('xthb').style
 function xcCalc(){const xi=$('xi');if(!xi||!$('xc')||$('xc').value==='THB')return;const c=$('xc').value,a=$('xa').value,u=Number($('amt').value);if(!a||!(u>0)){xi.textContent='';return}
   const r=fifoSpend(a,c,u,exId());xi.textContent=r.short>0?'เงินในบัญชีนี้ไม่พอ':`เทียบเป็นเงินบาท (ต้นทุนที่แลกมา) ≈ ${fmt(r.cost)}`}
 function fxTag(t){const sp=FS.filter(s=>s.txn_id===t.id);if(!sp.length)return '';const l=L.find(x=>x.id===sp[0].lot_id);return l?` · ${Number(sp.reduce((a,s)=>a+Number(s.units),0).toFixed(4)).toLocaleString('th-TH')} ${l.symbol.replace('FX:','')}`:''}
+function cardRows(a){let b=Number(a.opening_balance);
+  return T.filter(t=>t.from_account_id===a.id||t.to_account_id===a.id).sort((x,y)=>new Date(x.occurred_at)-new Date(y.occurred_at)).map(t=>{const x=Number(t.amount),out=t.from_account_id===a.id;b+=out?-x:x;return{t,out,x,bal:b}})}
+const owe=b=>fmt(Math.max(0,-b));
+const shiftYm=(ym,n)=>{const[y,m]=ym.split('-').map(Number),d=new Date(y,m-1+n,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
+const cardLabel=(t,out)=>t.txn_type==='card_purchase'?'รูดบัตร':out?TL[t.txn_type]:'ชำระบัตร';
+function cardView(a,ym){const rows=cardRows(a);let s0=null,e0=null;if(ym){const[y,m]=ym.split('-').map(Number);s0=new Date(y,m-1,1);e0=new Date(y,m,1)}
+  const view=rows.filter(r=>!ym||(new Date(r.t.occurred_at)>=s0&&new Date(r.t.occurred_at)<e0)),before=ym?rows.filter(r=>new Date(r.t.occurred_at)<s0):[];
+  const start=before.length?before[before.length-1].bal:Number(a.opening_balance),end=view.length?view[view.length-1].bal:start;
+  return{view,start,end,sw:view.filter(r=>r.out).reduce((c,r)=>c+r.x,0),pay:view.filter(r=>!r.out).reduce((c,r)=>c+r.x,0)}}
+function openCardHist(id,ym){const a=A.find(v=>v.id===id);if(!a)return;if(ym===undefined)ym=nowLocal().slice(0,7);const v=cardView(a,ym),lim=Number(a.credit_limit||0);
+  openSheet(`<h2 style="margin-top:0">ประวัติรูดบัตร · ${esc(a.nickname)}</h2>
+  <label>เลือกเดือน (ล้างช่องเพื่อดูทั้งหมด)<input type="month" value="${ym}" onchange="openCardHist('${id}',this.value)"></label>
+  <div class="btns" style="margin-bottom:12px">${ym?`<button class="ghost" onclick="openCardHist('${id}','${shiftYm(ym,-1)}')">◀ เดือนก่อน</button><button class="ghost" onclick="openCardHist('${id}','${shiftYm(ym,1)}')">เดือนถัดไป ▶</button>`:''}<button class="ghost" onclick="openCardHist('${id}','${ym?'':nowLocal().slice(0,7)}')">${ym?'ดูทั้งหมด':'ดูรายเดือน'}</button></div>
+  <div class="card" style="margin-bottom:12px"><div class="row"><span>ค้างชำระ${ym?'ต้นช่วง':'ยกมา'}</span><b>${owe(v.start)}</b></div><div class="row"><span>รูดบัตรรวม (${v.view.filter(r=>r.out).length} รายการ)</span><b style="color:var(--neg)">${fmt(v.sw)}</b></div><div class="row"><span>ชำระรวม (${v.view.filter(r=>!r.out).length} รายการ)</span><b style="color:var(--pos)">${fmt(v.pay)}</b></div><div class="row"><span>ค้างชำระปลายช่วง</span><b>${owe(v.end)}</b></div>${lim?`<div class="row"><span>วงเงินคงเหลือ (ปัจจุบัน)</span><span>${fmt(lim-Math.max(0,-bal(a)))}</span></div>`:''}</div>
+  ${v.view.length?`<div class="card">${v.view.slice().reverse().map(r=>{const t=r.t,tag=/\(งวด/.test(t.category||'')?' <span class="mut">[ผ่อน]</span>':'';
+    return `<div class="row" onclick="openSlip('${t.id}')" style="cursor:pointer;align-items:flex-start"><div><div>${cardLabel(t,r.out)}${t.category?' · '+esc(t.category):''}${tag}</div><div class="mut">${fdt(t.occurred_at)}${t.owner?' · '+esc(t.owner):''}${t.note?' · '+esc(t.note):''}</div><div class="mut">ค้างชำระหลังรายการ ${owe(r.bal)}</div></div><b style="color:${r.out?'var(--neg)':'var(--pos)'};white-space:nowrap">${r.out?'-':'+'}${fmt(r.x)}</b></div>`}).join('')}</div>`:'<div class="card"><p class="mut">ไม่มีรายการในช่วงนี้</p></div>'}
+  <div class="btns" style="margin-top:14px"><button class="ghost" onclick="closeSheet()">ปิด</button><button class="pri" onclick="exportCard('${id}','${ym}')">ดาวน์โหลด Excel</button></div>`)}
+function exportCard(id,ym){if(!window.XLSX){alert('โหลดตัวสร้างไฟล์ Excel ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่');return}
+  const a=A.find(v=>v.id===id),v=cardView(a,ym),d2=d=>{const x=new Date(d);return[x.toLocaleDateString('th-TH'),x.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})]};
+  const rows=[[`ประวัติรูดบัตร ${a.nickname} ${ym||'(ทั้งหมด)'}`],['ค้างชำระต้นช่วง',Math.max(0,-v.start)],[],['วันที่','เวลา','ประเภท','รายละเอียด','เจ้าของ','หมายเหตุ','รูดบัตร (บาท)','ชำระ (บาท)','ค้างชำระหลังรายการ']];
+  v.view.forEach(r=>{const t=r.t,[dd,tt]=d2(t.occurred_at);rows.push([dd,tt,cardLabel(t,r.out),t.category||'',t.owner||'',t.note||'',r.out?r.x:'',r.out?'':r.x,Math.max(0,-r.bal)])});
+  rows.push([],['รูดบัตรรวม',v.sw],['ชำระรวม',v.pay],['ค้างชำระปลายช่วง',Math.max(0,-v.end)]);
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),String(a.nickname).replace(/[\[\]:*?\/\\]/g,'').slice(0,28)||'บัตร');
+  XLSX.writeFile(wb,`บัตร_${a.nickname}_${ym||'ทั้งหมด'}.xlsx`)}
 let HD=0;
 const dayStart=n=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-(n-1));return d};
 function setHD(d){HD=d;home()}
