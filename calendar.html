@@ -50,7 +50,7 @@ const SB_URL='https://etqgjkeyoxgfncphtiao.supabase.co',SB_KEY='sb_publishable_a
 const DOW=['อา','จ','อ','พ','พฤ','ศ','ส'],MN=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const PC=['#B9B0D0','#3F7FBF','#C98A2B','#C0392B'],PL=['ไม่มี','ต่ำ','กลาง','สูง'],RL={none:'ไม่ทำซ้ำ',daily:'ทุกวัน',weekly:'ทุกสัปดาห์',monthly:'ทุกเดือน',bimonthly:'เดือนเว้นเดือน',yearly:'ทุกปี'},STEP={monthly:1,bimonthly:2,yearly:12};
 const COLORS=['#7457C2','#D9669A','#3D8F6B','#C98A2B','#3F7FBF','#8C6B55'],CN=['ม่วง','ชมพู','เขียว','เหลือง','ฟ้า','น้ำตาล'];
-let sb,TK=[],LS=[],IP=[],II=[],AC=[],IM=[],QDONE=false,ST={tab:'cal',view:'month',cur:new Date(),q:'',fl:'',fp:'',ft:'',done:false};
+let sb,TK=[],LS=[],IP=[],II=[],AC=[],IM=[],QDONE=false,ST={tab:'cal',view:'month',cur:new Date(),r1:'',r2:'',q:'',fl:'',fp:'',ft:'',done:false};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>'฿'+Number(n).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -104,17 +104,33 @@ function render(){
   let h=`<div class="top"><button class="ghost" aria-label="เมนู" onclick="openMenu()" style="font-size:20px">☰</button><h1>ปฏิทินและงาน</h1></div>
   <div class="tabs"><button class="chip${cal?' on':''}" onclick="setTab('cal')">ปฏิทิน</button><button class="chip${!cal?' on':''}" onclick="setTab('tasks')">งานทั้งหมด</button></div>`;
   if(cal){
-    h+=`<div class="hf">${[['month','เดือน'],['week','สัปดาห์'],['day','วัน']].map(([v,l])=>`<button class="chip${ST.view===v?' on':''}" onclick="setView('${v}')">${l}</button>`).join('')}<button class="chip" onclick="openDates()">★ วันสำคัญ</button></div>
-    <div class="nav"><button class="ghost" onclick="shift(-1)" aria-label="ก่อนหน้า">◀</button><div class="b">${navTitle()}</div><button class="ghost" onclick="shift(1)" aria-label="ถัดไป">▶</button><button onclick="ST.cur=new Date();render()">วันนี้</button></div>`;
-    h+=ST.view==='month'?monthView():ST.view==='week'?weekView():dayView();
+    h+=`<div class="hf">${[['month','เดือน'],['week','สัปดาห์'],['day','วัน'],['range','ช่วงวันที่']].map(([v,l])=>`<button class="chip${ST.view===v?' on':''}" onclick="setView('${v}')">${l}</button>`).join('')}<button class="chip" onclick="openDates()">★ วันสำคัญ</button></div>
+    <div class="nav"><button class="ghost" onclick="shift(-1)" aria-label="ก่อนหน้า">◀</button><div class="b">${navTitle()}</div><button class="ghost" onclick="shift(1)" aria-label="ถัดไป">▶</button><button onclick="goToday()">วันนี้</button></div>`;
+    h+=ST.view==='month'?monthView():ST.view==='week'?weekView():ST.view==='day'?dayView():rangeView();
   }else h+=taskTab();
   $('app').innerHTML=h+`<button class="fab" onclick="openTaskForm('',${cal?`'${ymdOf(ST.cur)}'`:"''"})">+ เพิ่มงาน</button>`;
   if(!cal)renderTL();
 }
-function setTab(t){ST.tab=t;render()}function setView(v){ST.view=v;render()}
-function shift(n){const c=ST.cur;ST.cur=ST.view==='month'?new Date(c.getFullYear(),c.getMonth()+n,1):new Date(c.getFullYear(),c.getMonth(),c.getDate()+n*(ST.view==='week'?7:1));render()}
-function navTitle(){const c=ST.cur;if(ST.view==='month')return `${MN[c.getMonth()]} ${c.getFullYear()+543}`;
+function setTab(t){ST.tab=t;render()}function setView(v){ST.view=v;if(v==='range'&&(!ST.r1||!ST.r2)){ST.r1=ymdOf(new Date());ST.r2=addDays(ST.r1,29)}render()}
+function shift(n){if(ST.view==='range'){const k=rangeLen();ST.r1=addDays(ST.r1,n*k);ST.r2=addDays(ST.r2,n*k);render();return}const c=ST.cur;ST.cur=ST.view==='month'?new Date(c.getFullYear(),c.getMonth()+n,1):new Date(c.getFullYear(),c.getMonth(),c.getDate()+n*(ST.view==='week'?7:1));render()}
+function navTitle(){if(ST.view==='range')return rangeTitle();const c=ST.cur;if(ST.view==='month')return `${MN[c.getMonth()]} ${c.getFullYear()+543}`;
   if(ST.view==='day')return fd(ymdOf(c));const s=new Date(c.getFullYear(),c.getMonth(),c.getDate()-c.getDay()),e=new Date(s.getFullYear(),s.getMonth(),s.getDate()+6);return `${s.getDate()} ${MN[s.getMonth()].slice(0,3)}. – ${e.getDate()} ${MN[e.getMonth()].slice(0,3)}. ${e.getFullYear()+543}`}
+const sdy=x=>pd(x).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});
+function rangeLen(){return ST.r1&&ST.r2&&ST.r2>=ST.r1?diffDays(ST.r2,ST.r1)+1:30}
+function rangeTitle(){return ST.r1&&ST.r2?`${sdy(ST.r1)} – ${sdy(ST.r2)}`:'เลือกช่วงวันที่'}
+function goToday(){ST.cur=new Date();if(ST.view==='range'){const n=rangeLen();ST.r1=ymdOf(new Date());ST.r2=addDays(ST.r1,n-1)}render()}
+function setRange(a,b){if(a&&b&&a>b){const t=a;a=b;b=t}ST.r1=a;ST.r2=b;render()}
+function quickRange(n){if(!ST.r1)ST.r1=ymdOf(new Date());ST.r2=addDays(ST.r1,n-1);render()}
+function rangeView(){const a=ST.r1,b=ST.r2;
+  let h=`<div class="card" style="padding:12px 16px;margin-bottom:10px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><label style="margin:0">ตั้งแต่วันที่<input type="date" value="${a}" onchange="setRange(this.value,ST.r2)"></label><label style="margin:0">ถึงวันที่<input type="date" value="${b}" onchange="setRange(ST.r1,this.value)"></label></div>
+  <div class="mut" style="margin:10px 0 6px">ความยาวช่วง (นับจากวันเริ่ม)</div><div class="hf" style="margin:0">${[7,15,30,60,90].map(n=>`<button class="chip" onclick="quickRange(${n})">${n} วัน</button>`).join('')}</div></div>`;
+  if(!a||!b)return h+'<div class="card"><p class="mut">เลือกวันที่เริ่มต้นและวันที่สิ้นสุด</p></div>';
+  const days=diffDays(b,a)+1;if(days>400)return h+'<div class="card"><p class="mut">เลือกช่วงได้ไม่เกิน 400 วัน</p></div>';
+  let nT=0,nI=0,nM=0,nd=0,body='';
+  for(let i=0;i<days;i++){const k=addDays(a,i),its=itemsOn(k);if(!its.length)continue;nd++;its.forEach(it=>{if(it.kind==='task')nT++;else if(it.kind==='inst')nI++;else nM++});
+    body+=`<h2>${fd(k)}</h2><div class="card">${its.map(it=>rowHTML(it)).join('')}</div>`}
+  h+=`<div class="note" style="margin-bottom:6px">${fd(a)} ถึง ${fd(b)} · ${days} วัน · มี ${nT+nI+nM} รายการใน ${nd} วัน<br>งาน ${nT} · งวดผ่อนชำระ ${nI} · วันสำคัญ ${nM}</div>`;
+  return h+(body||'<div class="card"><p class="mut">ไม่มีรายการในช่วงนี้</p></div>')}
 function monthView(){const c=ST.cur,y=c.getFullYear(),m=c.getMonth(),start=new Date(y,m,1-new Date(y,m,1).getDay()),today=ymdOf(new Date());
   let h=`<div class="dow">${DOW.map(d=>`<div>${d}</div>`).join('')}</div><div class="grid">`;
   for(let i=0;i<42;i++){const d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i),k=ymdOf(d),its=itemsOn(k),cl=it=>it.kind==='inst'?'#D9669A':it.kind==='imp'?'#C98A2B':colorOf(it.t);
