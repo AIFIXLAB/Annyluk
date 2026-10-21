@@ -515,9 +515,10 @@ const diffDays=(a,b)=>Math.round((pdY(a)-pdY(b))/864e5);
 function impNext(x){const today=ymdOf(new Date());if(!x.repeat_yearly)return{date:x.date_on,days:diffDays(x.date_on,today)};
   const[,m,d]=x.date_on.split('-').map(Number),mk=yy=>ymdOf(new Date(yy,m-1,Math.min(d,new Date(yy,m,0).getDate())));let o=mk(new Date().getFullYear());if(o<today)o=mk(new Date().getFullYear()+1);return{date:o,days:diffDays(o,today)}}
 function notifyEntries(){const today=ymdOf(new Date()),E=[],tm=t=>t.due_time?' · '+t.due_time.slice(0,5):'';
-  for(const t of TKS){if(t.done||!t.due_date)continue;const d=diffDays(t.due_date,today);
-    if(d<0)E.push({d,tone:'over',title:t.title,sub:`เลยกำหนดมา ${-d} วัน${tm(t)}`});
-    else if(d<=(t.remind_before||0))E.push({d,tone:d===0?'today':'soon',title:t.title,sub:(d===0?'ครบกำหนดวันนี้':`อีก ${d} วัน (${fdt2(t.due_date)})`)+tm(t)})}
+  for(const t of TKS){if(t.done||!t.due_date)continue;const d=diffDays(t.due_date,today),de=t.end_date?diffDays(t.end_date,today):d,en=t.end_time?' '+t.end_time.slice(0,5):'';
+    if(de<0)E.push({d:de,tone:'over',title:t.title,sub:`เลยกำหนดมา ${-de} วัน${t.end_date?' (สิ้นสุด '+fdt2(t.end_date)+en+')':tm(t)}`});
+    else if(d<0)E.push({d:0,tone:'today',title:t.title,sub:`กำลังดำเนินอยู่ · สิ้นสุด ${fdt2(t.end_date)}${en}`});
+    else if(d<=(t.remind_before||0))E.push({d,tone:d===0?'today':'soon',title:t.title,sub:(d===0?'เริ่มวันนี้':`อีก ${d} วัน (${fdt2(t.due_date)})`)+tm(t)+(t.end_date?` · สิ้นสุด ${fdt2(t.end_date)}${en}`:'')})}
   for(const i of II){if(paidItem(i))continue;const p=IP.find(x=>x.id===i.plan_id);if(!p)continue;const d=diffDays(i.due_date,today),ttl=`ผ่อน ${p.title} งวด ${i.seq}/${p.months}`,sb2=` · ${fmt(i.amount)} · ${nm(p.card_account_id)}`;
     if(d<0)E.push({d,tone:'over',title:ttl,sub:`เลยกำหนด ${-d} วัน`+sb2});else if(d<=3)E.push({d,tone:d===0?'today':'soon',title:ttl,sub:(d===0?'ครบกำหนดวันนี้':`อีก ${d} วัน`)+sb2})}
   for(const x of IMP){const n=impNext(x);if(n.days>=0&&n.days<=(x.remind_before||7))E.push({d:n.days,tone:n.days===0?'today':'soon',title:'★ '+x.title,sub:n.days===0?'วันนี้!':`อีก ${n.days} วัน (${fdt2(n.date)})`})}
